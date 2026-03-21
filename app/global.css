@@ -1,0 +1,147 @@
+@import "tailwindcss";
+
+@source "../app/**/*.{ts,tsx}";
+@source "../components/**/*.{ts,tsx}";
+@source "../hooks/**/*.{ts,tsx}";
+@source "../lib/**/*.{ts,tsx}";
+
+:root {
+  --bg: #08090c;
+  --surface: #0f1014;
+  --surface-2: #161820;
+  --surface-3: #1e2028;
+  --border: #252730;
+  --border-light: #2e3040;
+  --accent: #d4f72c;
+  --accent-hover: #bfe020;
+  --accent-muted: rgba(212, 247, 44, 0.07);
+  --accent-border: rgba(212, 247, 44, 0.2);
+  --text: #eeeef2;
+  --text-muted: #5a5c70;
+  --text-dim: #8b8d9e;
+  --green: #22c55e;
+  --red: #f43f5e;
+  --orange: #f97316;
+  --blue: #60a5fa;
+  --purple: #a78bfa;
+  --r: 12px;
+  --r-sm: 8px;
+  --r-lg: 18px;
+}
+
+html {
+  font-family: "Instrument Sans", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  scroll-behavior: smooth;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: "Cabinet Grotesk", sans-serif;
+}
+
+a {
+  text-decoration: none;
+}
+
+::selection {
+  background: var(--accent);
+  color: #08090c;
+}
+
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 10px;
+}
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
+.anim-fade-up {
+  animation: fadeUp 0.5s ease both;
+}
+.anim-fade-in {
+  animation: fadeIn 0.4s ease both;
+}
+.anim-scale-in {
+  animation: scaleIn 0.35s ease both;
+}
+
+.delay-1 {
+  animation-delay: 0.05s;
+}
+.delay-2 {
+  animation-delay: 0.1s;
+}
+.delay-3 {
+  animation-delay: 0.15s;
+}
+.delay-4 {
+  animation-delay: 0.2s;
+}
+.delay-5 {
+  animation-delay: 0.25s;
+}
+.delay-6 {
+  animation-delay: 0.3s;
+}
