@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import StatCard from "@/components/StatCard";
 import BookingCard from "@/components/BookingCard";
@@ -108,13 +108,19 @@ export default function DashboardPage() {
     time: SLOTS[0],
   });
   const [formError, setFormError] = useState("");
+  const [today, setToday] = useState(""); // kosong dulu, isi di client
 
-  const today = new Date().toLocaleDateString("id-ID", {
-    weekday: "long",
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
+  // fix hydration: date formatting hanya di client
+  useEffect(() => {
+    setToday(
+      new Date().toLocaleDateString("id-ID", {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      }),
+    );
+  }, []);
 
   function handleAddBooking() {
     if (!form.name.trim() || !form.phone.trim() || !form.date) {
@@ -151,64 +157,58 @@ export default function DashboardPage() {
     setShowModal(false);
   }
 
+  function handleCloseModal() {
+    setShowModal(false);
+    setFormError("");
+    setForm({
+      name: "",
+      phone: "",
+      service: SERVICES[0],
+      date: "",
+      time: SLOTS[0],
+    });
+  }
+
   return (
-    <div style={{ padding: "36px 40px" }} className="dashboard-page">
-      {/* Header */}
-      <div className="anim-fade-up" style={{ marginBottom: "32px" }}>
-        <p
-          style={{
-            color: "var(--text-muted)",
-            fontSize: "13px",
-            marginBottom: "6px",
-          }}
-        >
-          {today}
-        </p>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-          }}
-        >
-          <h1
-            style={{
-              fontFamily: "Cabinet Grotesk, sans-serif",
-              fontSize: "28px",
-              fontWeight: 900,
-              letterSpacing: "-0.5px",
-            }}
-          >
-            Selamat datang, Alfito 👋
-          </h1>
-          <button
-            onClick={() => setShowModal(true)}
-            style={{
-              padding: "10px 20px",
-              borderRadius: "var(--r-sm)",
-              background: "var(--accent)",
-              color: "#08090c",
-              fontSize: "13px",
-              fontWeight: 700,
-              cursor: "pointer",
-              border: "none",
-            }}
-          >
-            + Booking Manual
-          </button>
+    <div className="dash-page">
+      {/* ── HEADER ── */}
+      <div className="anim-fade-up dash-header">
+        <div>
+          {/* today hanya render kalau sudah ada nilainya — hindari mismatch */}
+          {today && (
+            <p
+              style={{
+                color: "var(--text-muted)",
+                fontSize: "13px",
+                marginBottom: "6px",
+              }}
+            >
+              {today}
+            </p>
+          )}
+          <h1 className="dash-title">Selamat datang, Alfito 👋</h1>
         </div>
+        <button
+          onClick={() => setShowModal(true)}
+          style={{
+            padding: "10px 20px",
+            borderRadius: "var(--r-sm)",
+            background: "var(--accent)",
+            color: "#08090c",
+            fontSize: "13px",
+            fontWeight: 700,
+            cursor: "pointer",
+            border: "none",
+            whiteSpace: "nowrap",
+            flexShrink: 0,
+          }}
+        >
+          + Booking Manual
+        </button>
       </div>
 
-      {/* Stats — full width 4 kolom */}
-      <div
-        className="anim-fade-up delay-1 stats-grid"
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(4, 1fr)",
-          gap: "14px",
-          marginBottom: "32px",
-        }}
-      >
+      {/* ── STATS ── */}
+      <div className="anim-fade-up delay-1 dash-stats">
         <StatCard
           label="Booking Hari Ini"
           value="8"
@@ -239,18 +239,10 @@ export default function DashboardPage() {
         />
       </div>
 
-      {/* Content grid */}
-      <div
-        className="dashboard-grid"
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 340px",
-          gap: "20px",
-          alignItems: "start",
-        }}
-      >
+      {/* ── CONTENT GRID ── */}
+      <div className="anim-fade-up delay-2 dash-grid">
         {/* Bookings list */}
-        <div className="anim-fade-up delay-2">
+        <div className="dash-bookings">
           <div
             style={{
               display: "flex",
@@ -288,10 +280,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Right panels */}
-        <div
-          className="anim-fade-up delay-3"
-          style={{ display: "flex", flexDirection: "column", gap: "16px" }}
-        >
+        <div className="dash-right">
           {/* Today schedule */}
           <div
             style={{
@@ -477,7 +466,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Modal Booking Manual */}
+      {/* ── MODAL BOOKING MANUAL ── */}
       {showModal && (
         <div
           style={{
@@ -491,7 +480,7 @@ export default function DashboardPage() {
             padding: "20px",
           }}
           onClick={(e) => {
-            if (e.target === e.currentTarget) setShowModal(false);
+            if (e.target === e.currentTarget) handleCloseModal();
           }}
         >
           <div
@@ -524,7 +513,7 @@ export default function DashboardPage() {
                 Booking Manual
               </h2>
               <button
-                onClick={() => setShowModal(false)}
+                onClick={handleCloseModal}
                 style={{
                   background: "none",
                   border: "none",
@@ -532,6 +521,7 @@ export default function DashboardPage() {
                   fontSize: "20px",
                   cursor: "pointer",
                   lineHeight: 1,
+                  padding: "2px 6px",
                 }}
               >
                 ✕
@@ -557,7 +547,6 @@ export default function DashboardPage() {
             <div
               style={{ display: "flex", flexDirection: "column", gap: "14px" }}
             >
-              {/* Nama */}
               <div>
                 <label style={modalLabelStyle}>Nama Customer *</label>
                 <input
@@ -566,9 +555,9 @@ export default function DashboardPage() {
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
                   style={modalInputStyle}
+                  autoFocus
                 />
               </div>
-              {/* Phone */}
               <div>
                 <label style={modalLabelStyle}>Nomor WhatsApp *</label>
                 <input
@@ -579,7 +568,6 @@ export default function DashboardPage() {
                   style={modalInputStyle}
                 />
               </div>
-              {/* Service */}
               <div>
                 <label style={modalLabelStyle}>Layanan</label>
                 <select
@@ -594,7 +582,6 @@ export default function DashboardPage() {
                   ))}
                 </select>
               </div>
-              {/* Date & Time */}
               <div
                 style={{
                   display: "grid",
@@ -608,6 +595,7 @@ export default function DashboardPage() {
                     type="date"
                     value={form.date}
                     onChange={(e) => setForm({ ...form, date: e.target.value })}
+                    className="date-input-light"
                     style={modalInputStyle}
                   />
                 </div>
@@ -628,7 +616,7 @@ export default function DashboardPage() {
 
             <div style={{ display: "flex", gap: "10px", marginTop: "24px" }}>
               <button
-                onClick={() => setShowModal(false)}
+                onClick={handleCloseModal}
                 style={{
                   flex: 1,
                   padding: "11px",
@@ -639,6 +627,7 @@ export default function DashboardPage() {
                   fontSize: "14px",
                   fontWeight: 500,
                   cursor: "pointer",
+                  fontFamily: "inherit",
                 }}
               >
                 Batal
@@ -655,6 +644,7 @@ export default function DashboardPage() {
                   fontSize: "14px",
                   fontWeight: 700,
                   cursor: "pointer",
+                  fontFamily: "inherit",
                 }}
               >
                 ✓ Simpan Booking
@@ -665,23 +655,77 @@ export default function DashboardPage() {
       )}
 
       <style>{`
-        @media (max-width: 1024px) {
-          .dashboard-grid {
-            grid-template-columns: 1fr !important;
-          }
+        .dash-page {
+          padding: 36px 40px;
+          box-sizing: border-box;
+          width: 100%;
+        }
+        .dash-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          margin-bottom: 32px;
+          gap: 12px;
+        }
+        .dash-title {
+          font-family: 'Cabinet Grotesk', sans-serif;
+          font-size: 28px;
+          font-weight: 900;
+          letter-spacing: -0.5px;
+        }
+        .dash-stats {
+          display: grid;
+          grid-template-columns: repeat(4, 1fr);
+          gap: 14px;
+          margin-bottom: 28px;
+          width: 100%;
+          box-sizing: border-box;
+        }
+        .dash-grid {
+          display: grid;
+          grid-template-columns: 1fr 340px;
+          gap: 20px;
+          align-items: start;
+          width: 100%;
+          box-sizing: border-box;
+        }
+        .dash-bookings {
+          min-width: 0;
+        }
+        .dash-right {
+          display: flex;
+          flex-direction: column;
+          gap: 16px;
+          min-width: 0;
+        }
+        .date-input-light::-webkit-calendar-picker-indicator {
+          filter: invert(1) brightness(2);
+          cursor: pointer;
+          opacity: 0.7;
+        }
+        .date-input-light::-webkit-calendar-picker-indicator:hover {
+          opacity: 1;
+        }
+
+        @media (max-width: 1100px) {
+          .dash-grid { grid-template-columns: 1fr 300px; }
+        }
+        @media (max-width: 900px) {
+          .dash-grid  { grid-template-columns: 1fr; }
+          .dash-stats { grid-template-columns: repeat(2, 1fr); }
         }
         @media (max-width: 768px) {
-          .dashboard-page {
-            padding: 20px 16px !important;
-          }
-          .stats-grid {
-            grid-template-columns: repeat(2, 1fr) !important;
-          }
+          .dash-page    { padding: 20px 16px; }
+          .dash-title   { font-size: 22px; }
+          .dash-header  { align-items: center; margin-bottom: 24px; }
+          .dash-stats   { grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 20px; }
+          .dash-grid    { grid-template-columns: 1fr; gap: 16px; }
+          .dash-bookings { width: 100%; box-sizing: border-box; overflow: hidden; }
+          .dash-right   { width: 100%; box-sizing: border-box; }
         }
         @media (max-width: 480px) {
-          .stats-grid {
-            grid-template-columns: 1fr !important;
-          }
+          .dash-page  { padding: 16px 12px; }
+          .dash-stats { grid-template-columns: repeat(2, 1fr); gap: 8px; }
         }
       `}</style>
     </div>
@@ -708,4 +752,5 @@ const modalInputStyle: React.CSSProperties = {
   fontSize: "14px",
   outline: "none",
   fontFamily: "inherit",
+  boxSizing: "border-box",
 };

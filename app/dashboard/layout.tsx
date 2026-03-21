@@ -30,7 +30,7 @@ export default function DashboardLayout({
             display: "none",
             alignItems: "center",
             justifyContent: "space-between",
-            padding: "14px 20px",
+            padding: "12px 16px",
             borderBottom: "1px solid var(--border)",
             background: "var(--surface)",
             position: "sticky",
@@ -38,6 +38,7 @@ export default function DashboardLayout({
             zIndex: 50,
           }}
         >
+          {/* Hamburger button */}
           <button
             onClick={() => setSidebarOpen(true)}
             style={{
@@ -45,14 +46,51 @@ export default function DashboardLayout({
               border: "1px solid var(--border)",
               borderRadius: "var(--r-sm)",
               color: "var(--text)",
-              fontSize: "18px",
               cursor: "pointer",
-              padding: "6px 10px",
-              lineHeight: 1,
+              width: "36px",
+              height: "36px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+              padding: 0,
             }}
           >
-            ☰
+            <svg
+              width="18"
+              height="14"
+              viewBox="0 0 18 14"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <rect
+                x="0"
+                y="0"
+                width="18"
+                height="2"
+                rx="1"
+                fill="currentColor"
+              />
+              <rect
+                x="0"
+                y="6"
+                width="18"
+                height="2"
+                rx="1"
+                fill="currentColor"
+              />
+              <rect
+                x="0"
+                y="12"
+                width="18"
+                height="2"
+                rx="1"
+                fill="currentColor"
+              />
+            </svg>
           </button>
+
+          {/* Logo center — sama persis dengan Sidebar */}
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
             <div
               style={{
@@ -81,7 +119,9 @@ export default function DashboardLayout({
               BookYourCut
             </span>
           </div>
-          <div style={{ width: "40px" }} />
+
+          {/* Spacer kanan agar logo tetap center */}
+          <div style={{ width: "36px", flexShrink: 0 }} />
         </div>
 
         <main style={{ flex: 1, overflowY: "auto", overflowX: "hidden" }}>

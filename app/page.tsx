@@ -124,7 +124,7 @@ export default function LandingPage() {
               flexShrink: 0,
             }}
           >
-            S
+            B
           </div>
           <span
             style={{
@@ -472,7 +472,7 @@ export default function LandingPage() {
               color: "#08090c",
             }}
           >
-            S
+            B
           </div>
           <span
             style={{

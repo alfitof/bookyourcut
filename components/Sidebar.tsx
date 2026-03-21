@@ -89,7 +89,7 @@ export default function Sidebar({
                 color: "#08090c",
               }}
             >
-              B
+              S
             </div>
             <span
               style={{
@@ -98,7 +98,7 @@ export default function Sidebar({
                 fontSize: "18px",
               }}
             >
-              BookYourCut
+              SlotIn
             </span>
           </div>
 
