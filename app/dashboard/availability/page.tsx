@@ -88,28 +88,11 @@ export default function AvailabilityPage() {
   }
 
   return (
-    <div style={{ padding: "36px 40px" }}>
-      <div
-        className="anim-fade-up"
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "flex-start",
-          marginBottom: "32px",
-        }}
-      >
+    <div className="avail-page">
+      {/* Header */}
+      <div className="anim-fade-up avail-header">
         <div>
-          <h1
-            style={{
-              fontFamily: "Cabinet Grotesk, sans-serif",
-              fontSize: "28px",
-              fontWeight: 900,
-              letterSpacing: "-0.5px",
-              marginBottom: "6px",
-            }}
-          >
-            Jam Kerja
-          </h1>
+          <h1 className="avail-title">Jam Kerja</h1>
           <p style={{ color: "var(--text-dim)", fontSize: "14px" }}>
             Atur kapan customermu bisa melakukan booking.
           </p>
@@ -126,12 +109,15 @@ export default function AvailabilityPage() {
             cursor: "pointer",
             border: "none",
             transition: "background 0.2s",
+            flexShrink: 0,
+            whiteSpace: "nowrap",
           }}
         >
           {saved ? "✓ Tersimpan!" : "Simpan Perubahan"}
         </button>
       </div>
 
+      {/* Day rows */}
       <div
         className="anim-fade-up delay-1"
         style={{ display: "flex", flexDirection: "column", gap: "10px" }}
@@ -141,144 +127,103 @@ export default function AvailabilityPage() {
           return (
             <div
               key={day}
-              style={{
-                padding: "20px 24px",
-                borderRadius: "var(--r)",
-                background: "var(--surface)",
-                border: `1px solid ${d.enabled ? "var(--border)" : "var(--border)"}`,
-                display: "flex",
-                alignItems: "center",
-                gap: "20px",
-                opacity: d.enabled ? 1 : 0.5,
-                transition: "opacity 0.2s",
-              }}
+              className="avail-row"
+              style={{ opacity: d.enabled ? 1 : 0.5 }}
             >
-              {/* Toggle */}
-              <div
-                onClick={() => toggle(day)}
-                style={{
-                  width: "40px",
-                  height: "22px",
-                  borderRadius: "11px",
-                  background: d.enabled ? "var(--accent)" : "var(--surface-3)",
-                  border: `1px solid ${d.enabled ? "var(--accent)" : "var(--border)"}`,
-                  position: "relative",
-                  cursor: "pointer",
-                  flexShrink: 0,
-                  transition: "background 0.2s",
-                }}
-              >
+              {/* Toggle + Day name — always left, fixed width */}
+              <div className="avail-left">
                 <div
+                  onClick={() => toggle(day)}
                   style={{
-                    position: "absolute",
-                    top: "2px",
-                    left: d.enabled ? "18px" : "2px",
-                    width: "16px",
-                    height: "16px",
-                    borderRadius: "50%",
-                    background: d.enabled ? "#08090c" : "var(--text-muted)",
-                    transition: "left 0.2s",
-                  }}
-                />
-              </div>
-
-              {/* Day name */}
-              <div style={{ width: "70px", flexShrink: 0 }}>
-                <p
-                  style={{
-                    fontFamily: "Cabinet Grotesk, sans-serif",
-                    fontWeight: 700,
-                    fontSize: "14px",
+                    width: "40px",
+                    height: "22px",
+                    borderRadius: "11px",
+                    background: d.enabled
+                      ? "var(--accent)"
+                      : "var(--surface-3)",
+                    border: `1px solid ${d.enabled ? "var(--accent)" : "var(--border)"}`,
+                    position: "relative",
+                    cursor: "pointer",
+                    flexShrink: 0,
+                    transition: "background 0.2s",
                   }}
                 >
-                  {day}
-                </p>
-                <p style={{ color: "var(--text-muted)", fontSize: "11px" }}>
-                  {d.enabled ? "Buka" : "Tutup"}
-                </p>
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: "2px",
+                      left: d.enabled ? "18px" : "2px",
+                      width: "16px",
+                      height: "16px",
+                      borderRadius: "50%",
+                      background: d.enabled ? "#08090c" : "var(--text-muted)",
+                      transition: "left 0.2s",
+                    }}
+                  />
+                </div>
+                <div>
+                  <p
+                    style={{
+                      fontFamily: "Cabinet Grotesk, sans-serif",
+                      fontWeight: 700,
+                      fontSize: "14px",
+                    }}
+                  >
+                    {day}
+                  </p>
+                  <p style={{ color: "var(--text-muted)", fontSize: "11px" }}>
+                    {d.enabled ? "Buka" : "Tutup"}
+                  </p>
+                </div>
               </div>
 
-              {/* Time inputs */}
+              {/* Controls */}
               {d.enabled ? (
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "12px",
-                    flex: 1,
-                    flexWrap: "wrap",
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "8px",
-                    }}
-                  >
-                    <label
-                      style={{ color: "var(--text-muted)", fontSize: "12px" }}
-                    >
-                      Buka
-                    </label>
-                    <input
-                      type="time"
-                      value={d.start}
-                      onChange={(e) => update(day, "start", e.target.value)}
+                <div className="avail-controls">
+                  {/* Jam buka - tutup */}
+                  <div className="avail-open-close">
+                    <div
                       style={{
-                        padding: "6px 10px",
-                        borderRadius: "var(--r-sm)",
-                        background: "var(--surface-2)",
-                        border: "1px solid var(--border)",
-                        color: "var(--text)",
-                        fontSize: "13px",
-                        outline: "none",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
                       }}
-                    />
-                  </div>
-                  <span style={{ color: "var(--text-muted)" }}>—</span>
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "8px",
-                    }}
-                  >
-                    <label
-                      style={{ color: "var(--text-muted)", fontSize: "12px" }}
                     >
-                      Tutup
-                    </label>
-                    <input
-                      type="time"
-                      value={d.end}
-                      onChange={(e) => update(day, "end", e.target.value)}
+                      <label style={timeLabelStyle}>Buka</label>
+                      <input
+                        type="time"
+                        value={d.start}
+                        onChange={(e) => update(day, "start", e.target.value)}
+                        className="time-input"
+                      />
+                    </div>
+                    <span style={{ color: "var(--text-muted)" }}>—</span>
+                    <div
                       style={{
-                        padding: "6px 10px",
-                        borderRadius: "var(--r-sm)",
-                        background: "var(--surface-2)",
-                        border: "1px solid var(--border)",
-                        color: "var(--text)",
-                        fontSize: "13px",
-                        outline: "none",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
                       }}
-                    />
+                    >
+                      <label style={timeLabelStyle}>Tutup</label>
+                      <input
+                        type="time"
+                        value={d.end}
+                        onChange={(e) => update(day, "end", e.target.value)}
+                        className="time-input"
+                      />
+                    </div>
                   </div>
 
-                  <div
-                    style={{
-                      marginLeft: "auto",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "8px",
-                      padding: "6px 12px",
-                      borderRadius: "var(--r-sm)",
-                      background: "var(--surface-3)",
-                      border: "1px solid var(--border)",
-                    }}
-                  >
+                  {/* Istirahat — di kanan, style kotak */}
+                  <div className="avail-break">
                     <span
-                      style={{ color: "var(--text-muted)", fontSize: "12px" }}
+                      style={{
+                        color: "var(--text-muted)",
+                        fontSize: "12px",
+                        whiteSpace: "nowrap",
+                        flexShrink: 0,
+                      }}
                     >
                       Istirahat:
                     </span>
@@ -288,16 +233,14 @@ export default function AvailabilityPage() {
                       onChange={(e) =>
                         update(day, "breakStart", e.target.value)
                       }
-                      style={{
-                        background: "transparent",
-                        border: "none",
-                        color: "var(--text-dim)",
-                        fontSize: "12px",
-                        outline: "none",
-                      }}
+                      className="time-input time-input-sm"
                     />
                     <span
-                      style={{ color: "var(--text-muted)", fontSize: "12px" }}
+                      style={{
+                        color: "var(--text-muted)",
+                        fontSize: "12px",
+                        flexShrink: 0,
+                      }}
                     >
                       –
                     </span>
@@ -305,13 +248,7 @@ export default function AvailabilityPage() {
                       type="time"
                       value={d.breakEnd}
                       onChange={(e) => update(day, "breakEnd", e.target.value)}
-                      style={{
-                        background: "transparent",
-                        border: "none",
-                        color: "var(--text-dim)",
-                        fontSize: "12px",
-                        outline: "none",
-                      }}
+                      className="time-input time-input-sm"
                     />
                   </div>
                 </div>
@@ -325,20 +262,8 @@ export default function AvailabilityPage() {
         })}
       </div>
 
-      {/* Buffer time setting */}
-      <div
-        className="anim-fade-up delay-2"
-        style={{
-          marginTop: "24px",
-          padding: "24px",
-          borderRadius: "var(--r)",
-          background: "var(--surface)",
-          border: "1px solid var(--border)",
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gap: "24px",
-        }}
-      >
+      {/* Buffer & Min Notice */}
+      <div className="anim-fade-up delay-2 avail-extra">
         <div>
           <p
             style={{
@@ -359,19 +284,7 @@ export default function AvailabilityPage() {
           >
             Jeda antar booking agar tidak terlalu mepet.
           </p>
-          <select
-            defaultValue="10 menit"
-            style={{
-              width: "100%",
-              padding: "10px 14px",
-              borderRadius: "var(--r-sm)",
-              background: "var(--surface-2)",
-              border: "1px solid var(--border)",
-              color: "var(--text)",
-              fontSize: "14px",
-              outline: "none",
-            }}
-          >
+          <select defaultValue="10 menit" style={selectStyle}>
             <option>Tidak ada</option>
             <option>5 menit</option>
             <option>10 menit</option>
@@ -399,19 +312,7 @@ export default function AvailabilityPage() {
           >
             Berapa jam sebelumnya customer bisa booking.
           </p>
-          <select
-            defaultValue="2 jam"
-            style={{
-              width: "100%",
-              padding: "10px 14px",
-              borderRadius: "var(--r-sm)",
-              background: "var(--surface-2)",
-              border: "1px solid var(--border)",
-              color: "var(--text)",
-              fontSize: "14px",
-              outline: "none",
-            }}
-          >
+          <select defaultValue="2 jam" style={selectStyle}>
             <option>1 jam</option>
             <option>2 jam</option>
             <option>4 jam</option>
@@ -419,6 +320,194 @@ export default function AvailabilityPage() {
           </select>
         </div>
       </div>
+
+      <style>{`
+        .avail-page {
+          padding: 36px 40px;
+          box-sizing: border-box;
+        }
+        .avail-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          margin-bottom: 32px;
+          gap: 12px;
+        }
+        .avail-title {
+          font-family: 'Cabinet Grotesk', sans-serif;
+          font-size: 28px;
+          font-weight: 900;
+          letter-spacing: -0.5px;
+          margin-bottom: 6px;
+        }
+
+        /* ── ROW ── */
+        .avail-row {
+          padding: 18px 20px;
+          border-radius: var(--r);
+          background: var(--surface);
+          border: 1px solid var(--border);
+          display: flex;
+          align-items: center;
+          gap: 16px;
+          transition: opacity 0.2s;
+          box-sizing: border-box;
+          width: 100%;
+        }
+
+        /* Toggle + nama */
+        .avail-left {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          flex-shrink: 0;
+          width: 110px;
+        }
+
+        /* All controls: jam buka-tutup + istirahat */
+        .avail-controls {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          flex: 1;
+          min-width: 0;
+          flex-wrap: wrap;
+        }
+
+        /* Jam buka - tutup */
+        .avail-open-close {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          flex-shrink: 0;
+        }
+
+        /* Istirahat — kotak abu di kanan */
+        .avail-break {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          padding: 6px 10px;
+          border-radius: var(--r-sm);
+          background: var(--surface-3);
+          border: 1px solid var(--border);
+          margin-left: auto;
+          flex-shrink: 0;
+        }
+
+        /* Time inputs */
+        .time-input {
+          padding: 6px 8px;
+          border-radius: var(--r-sm);
+          background: var(--surface-2);
+          border: 1px solid var(--border);
+          color: var(--text);
+          font-size: 13px;
+          outline: none;
+          font-family: inherit;
+          width: 108px;
+          box-sizing: border-box;
+        }
+        .time-input-sm {
+          width: 120px;
+        }
+        .time-input::-webkit-calendar-picker-indicator {
+          filter: invert(1) brightness(2);
+          cursor: pointer;
+          opacity: 0.6;
+        }
+        .time-input::-webkit-calendar-picker-indicator:hover {
+          opacity: 1;
+        }
+
+        /* Extra settings */
+        .avail-extra {
+          margin-top: 24px;
+          padding: 24px;
+          border-radius: var(--r);
+          background: var(--surface);
+          border: 1px solid var(--border);
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 24px;
+        }
+
+        /* ══════════════════════
+           RESPONSIVE
+        ══════════════════════ */
+
+        /* 900px — istirahat turun ke baris baru tapi tetap di kanan */
+        @media (max-width: 900px) {
+          .avail-break {
+            margin-left: 0;
+          }
+        }
+
+        /* 768px — row jadi 2 baris: atas (toggle+nama), bawah (controls) */
+        @media (max-width: 768px) {
+          .avail-page { padding: 20px 16px; }
+          .avail-title { font-size: 22px; }
+
+          .avail-row {
+            flex-wrap: wrap;
+            padding: 14px 16px;
+            gap: 12px;
+          }
+          .avail-left {
+            width: 100%;
+          }
+          .avail-controls {
+            width: 100%;
+            flex-wrap: wrap;
+            gap: 10px;
+          }
+          /* istirahat full width di mobile, tidak margin-left auto */
+          .avail-break {
+            margin-left: 0;
+            width: 100%;
+            box-sizing: border-box;
+            flex-wrap: wrap;
+          }
+          .avail-extra {
+            grid-template-columns: 1fr;
+            gap: 16px;
+          }
+        }
+
+        /* 480px */
+        @media (max-width: 480px) {
+          .avail-page { padding: 16px 12px; }
+          .time-input {
+            width: 92px;
+            font-size: 12px;
+          }
+          .time-input-sm {
+            width: 86px;
+          }
+          .avail-open-close {
+            flex-wrap: wrap;
+            gap: 6px;
+          }
+        }
+      `}</style>
     </div>
   );
 }
+
+const timeLabelStyle: React.CSSProperties = {
+  color: "var(--text-muted)",
+  fontSize: "12px",
+  flexShrink: 0,
+};
+
+const selectStyle: React.CSSProperties = {
+  width: "100%",
+  padding: "10px 14px",
+  borderRadius: "var(--r-sm)",
+  background: "var(--surface-2)",
+  border: "1px solid var(--border)",
+  color: "var(--text)",
+  fontSize: "14px",
+  outline: "none",
+  fontFamily: "inherit",
+};

@@ -104,10 +104,29 @@ export default function BookingPage() {
     .join(" ");
   const selectedServiceData = SERVICES.find((s) => s.id === selectedService);
 
+  function isValidEmail(email: string) {
+    if (!email.trim()) return true; // kosong = ok (opsional)
+    const regex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+    return regex.test(email.trim());
+  }
+
+  function isValidPhone(phone: string) {
+    if (!phone.trim()) return false; // wajib diisi
+    // hapus spasi, strip, dan tanda kurung
+    const cleaned = phone.replace(/[\s\-().]/g, "");
+    // harus dimulai dengan 08 atau +628 atau 628
+    // panjang 10-15 digit
+    const regex = /^(\+62|62|0)8[1-9][0-9]{7,11}$/;
+    return regex.test(cleaned);
+  }
+
   const canProceed: Record<number, boolean> = {
     1: selectedService !== null,
     2: selectedDate !== null && selectedSlot !== null,
-    3: form.name.trim() !== "" && form.phone.trim() !== "",
+    3:
+      form.name.trim() !== "" &&
+      isValidPhone(form.phone) &&
+      isValidEmail(form.email),
   };
 
   function handleSubmit() {
@@ -726,7 +745,14 @@ export default function BookingPage() {
                   placeholder="cth: 08123456789"
                   value={form.phone}
                   onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                  style={formInputStyle}
+                  style={{
+                    ...formInputStyle,
+                    border:
+                      form.phone && !isValidPhone(form.phone)
+                        ? "1px solid rgba(244,63,94,0.6)"
+                        : "1px solid var(--border)",
+                    transition: "border-color 0.2s",
+                  }}
                 />
                 <p
                   style={{
@@ -737,6 +763,18 @@ export default function BookingPage() {
                 >
                   Reminder akan dikirim ke nomor ini via WhatsApp.
                 </p>
+                {form.phone && !isValidPhone(form.phone) && (
+                  <p
+                    style={{
+                      color: "var(--red)",
+                      fontSize: "12px",
+                      marginTop: "5px",
+                    }}
+                  >
+                    Nomor tidak valid. Gunakan format: 08xx, +628xx, atau 628xx
+                    (10–13 digit)
+                  </p>
+                )}
               </div>
 
               <div>
@@ -758,8 +796,26 @@ export default function BookingPage() {
                   placeholder="cth: budi@gmail.com"
                   value={form.email}
                   onChange={(e) => setForm({ ...form, email: e.target.value })}
-                  style={formInputStyle}
+                  style={{
+                    ...formInputStyle,
+                    border:
+                      form.email && !isValidEmail(form.email)
+                        ? "1px solid rgba(244,63,94,0.6)"
+                        : "1px solid var(--border)",
+                    transition: "border-color 0.2s",
+                  }}
                 />
+                {form.email && !isValidEmail(form.email) && (
+                  <p
+                    style={{
+                      color: "var(--red)",
+                      fontSize: "12px",
+                      marginTop: "5px",
+                    }}
+                  >
+                    Format email tidak valid. Contoh: nama@gmail.com
+                  </p>
+                )}
               </div>
 
               <div>

@@ -1,7 +1,13 @@
 import Link from "next/link";
 
-export default function SuccessPage({ params }: { params: { slug: string } }) {
-  const businessName = params.slug
+export default async function SuccessPage({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}) {
+  const { slug } = await params;
+
+  const businessName = (slug ?? "")
     .split("-")
     .map((w: string) => w.charAt(0).toUpperCase() + w.slice(1))
     .join(" ");
@@ -19,11 +25,7 @@ export default function SuccessPage({ params }: { params: { slug: string } }) {
     >
       <div
         className="anim-scale-in"
-        style={{
-          width: "100%",
-          maxWidth: "460px",
-          textAlign: "center",
-        }}
+        style={{ width: "100%", maxWidth: "460px", textAlign: "center" }}
       >
         {/* Check icon */}
         <div
@@ -144,7 +146,7 @@ export default function SuccessPage({ params }: { params: { slug: string } }) {
 
         <div style={{ display: "flex", gap: "10px" }}>
           <Link
-            href={`/book/${params.slug}`}
+            href={`/book/${slug}`}
             style={{
               flex: 1,
               padding: "12px",
@@ -155,6 +157,7 @@ export default function SuccessPage({ params }: { params: { slug: string } }) {
               fontSize: "14px",
               fontWeight: 500,
               textAlign: "center",
+              textDecoration: "none",
             }}
           >
             Booking Lagi
@@ -170,6 +173,7 @@ export default function SuccessPage({ params }: { params: { slug: string } }) {
               fontSize: "14px",
               fontWeight: 700,
               textAlign: "center",
+              textDecoration: "none",
             }}
           >
             Kembali ke Home
