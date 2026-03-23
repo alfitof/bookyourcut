@@ -5,80 +5,7 @@ import StatCard from "@/components/StatCard";
 import BookingCard from "@/components/BookingCard";
 import Badge from "@/components/Badge";
 import { useAuth } from "@/context/AuthContext";
-
-const initialBookings = [
-  {
-    id: 1,
-    customerName: "Budi Santoso",
-    service: "Haircut",
-    date: "Hari ini",
-    time: "10:00",
-    phone: "0812-3456-7890",
-    status: "confirmed" as const,
-    price: "Rp 50rb",
-  },
-  {
-    id: 2,
-    customerName: "Reza Firmansyah",
-    service: "Haircut + Beard",
-    date: "Hari ini",
-    time: "11:30",
-    phone: "0813-2233-4455",
-    status: "confirmed" as const,
-    price: "Rp 75rb",
-  },
-  {
-    id: 3,
-    customerName: "Dani Prasetyo",
-    service: "Haircut",
-    date: "Hari ini",
-    time: "13:00",
-    phone: "0857-9988-7766",
-    status: "pending" as const,
-    price: "Rp 50rb",
-  },
-  {
-    id: 4,
-    customerName: "Hendra Wijaya",
-    service: "Coloring",
-    date: "Besok",
-    time: "09:00",
-    phone: "0821-5544-3322",
-    status: "confirmed" as const,
-    price: "Rp 150rb",
-  },
-  {
-    id: 5,
-    customerName: "Fajar Nugroho",
-    service: "Haircut",
-    date: "Besok",
-    time: "14:00",
-    phone: "0878-1122-3344",
-    status: "confirmed" as const,
-    price: "Rp 50rb",
-  },
-];
-
-const reminderQueue = [
-  {
-    name: "Reza Firmansyah",
-    type: "H-1 Jam",
-    time: "10:30",
-    status: "Terkirim",
-  },
-  {
-    name: "Hendra Wijaya",
-    type: "H-1 Hari",
-    time: "08:00",
-    status: "Dijadwalkan",
-  },
-  {
-    name: "Fajar Nugroho",
-    type: "H-1 Hari",
-    time: "08:00",
-    status: "Dijadwalkan",
-  },
-];
+import { getBookings, addBooking, type Booking } from "@/lib/firestore";
 
 const SERVICES = ["Haircut", "Haircut + Beard", "Coloring", "Keramas"];
 const SLOTS = [
@@ -98,10 +25,20 @@ const SLOTS = [
   "16:30",
 ];
 
+const SERVICE_INFO: Record<string, { duration: string; price: string }> = {
+  Haircut: { duration: "30 mnt", price: "Rp 50rb" },
+  "Haircut + Beard": { duration: "45 mnt", price: "Rp 75rb" },
+  Coloring: { duration: "90 mnt", price: "Rp 150rb" },
+  Keramas: { duration: "15 mnt", price: "Rp 25rb" },
+};
+
 export default function DashboardPage() {
   const { user } = useAuth();
-  const [bookings, setBookings] = useState(initialBookings);
+
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [loadingData, setLoadingData] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({
     name: "",
     phone: "",
@@ -110,9 +47,8 @@ export default function DashboardPage() {
     time: SLOTS[0],
   });
   const [formError, setFormError] = useState("");
-  const [today, setToday] = useState(""); // kosong dulu, isi di client
+  const [today, setToday] = useState("");
 
-  // fix hydration: date formatting hanya di client
   useEffect(() => {
     setToday(
       new Date().toLocaleDateString("id-ID", {
@@ -124,39 +60,93 @@ export default function DashboardPage() {
     );
   }, []);
 
-  function handleAddBooking() {
+  useEffect(() => {
+    if (!user) return;
+    fetchBookings();
+  }, [user]);
+
+  async function fetchBookings() {
+    if (!user) return;
+    setLoadingData(true);
+    try {
+      const data = await getBookings(user.uid);
+      setBookings(data);
+    } catch (err) {
+      console.error("Error fetching bookings:", err);
+    } finally {
+      setLoadingData(false);
+    }
+  }
+
+  // ── Stats ──
+  const today_date = new Date().toLocaleDateString("id-ID", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+  const bookingsToday = bookings.filter((b) => b.date === today_date).length;
+  const bookingsMonth = bookings.length;
+  const remindersSent = bookings.filter(
+    (b) => b.status === "confirmed" || b.status === "completed",
+  ).length;
+  const revenue = bookings
+    .filter((b) => b.status === "completed")
+    .reduce((acc, b) => {
+      const num = parseInt(b.price.replace(/\D/g, "")) || 0;
+      return acc + num;
+    }, 0);
+
+  const revenueLabel =
+    revenue >= 1000000
+      ? `Rp ${(revenue / 1000000).toFixed(1)}jt`
+      : revenue >= 1000
+        ? `Rp ${(revenue / 1000).toFixed(0)}rb`
+        : `Rp ${revenue}`;
+
+  async function handleAddBooking() {
+    if (!user) return;
     if (!form.name.trim() || !form.phone.trim() || !form.date) {
       setFormError("Nama, nomor HP, dan tanggal wajib diisi.");
       return;
     }
     setFormError("");
-    const dateObj = new Date(form.date);
-    const formatted = dateObj.toLocaleDateString("id-ID", {
-      day: "numeric",
-      month: "short",
-      year: "numeric",
-    });
-    setBookings([
-      {
-        id: Date.now(),
+    setSubmitting(true);
+
+    try {
+      const dateObj = new Date(form.date);
+      const formatted = dateObj.toLocaleDateString("id-ID", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      });
+      const info = SERVICE_INFO[form.service] ?? { duration: "—", price: "—" };
+
+      await addBooking(user.uid, {
         customerName: form.name,
         service: form.service,
         date: formatted,
         time: form.time,
         phone: form.phone,
         status: "confirmed",
-        price: "",
-      },
-      ...bookings,
-    ]);
-    setForm({
-      name: "",
-      phone: "",
-      service: SERVICES[0],
-      date: "",
-      time: SLOTS[0],
-    });
-    setShowModal(false);
+        duration: info.duration,
+        price: info.price,
+      });
+
+      await fetchBookings();
+      setForm({
+        name: "",
+        phone: "",
+        service: SERVICES[0],
+        date: "",
+        time: SLOTS[0],
+      });
+      setShowModal(false);
+    } catch (err) {
+      console.error("Error adding booking:", err);
+      setFormError("Gagal menambahkan booking. Coba lagi.");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   function handleCloseModal() {
@@ -171,12 +161,21 @@ export default function DashboardPage() {
     });
   }
 
+  const reminderQueue = bookings
+    .filter((b) => b.status === "confirmed")
+    .slice(0, 3)
+    .map((b) => ({
+      name: b.customerName,
+      type: "H-1 Hari",
+      time: b.time,
+      status: "Dijadwalkan",
+    }));
+
   return (
     <div className="dash-page">
       {/* ── HEADER ── */}
       <div className="anim-fade-up dash-header">
         <div>
-          {/* today hanya render kalau sudah ada nilainya — hindari mismatch */}
           {today && (
             <p
               style={{
@@ -215,37 +214,39 @@ export default function DashboardPage() {
       <div className="anim-fade-up delay-1 dash-stats">
         <StatCard
           label="Booking Hari Ini"
-          value="8"
+          value={loadingData ? "—" : bookingsToday.toString()}
           icon="◫"
           accent
-          trend="up"
-          trendValue="2 dari kemarin"
+          trend={bookingsToday > 0 ? "up" : "neutral"}
+          trendValue={
+            bookingsToday > 0 ? `${bookingsToday} booking` : "Belum ada"
+          }
         />
         <StatCard
-          label="Booking Bulan Ini"
-          value="94"
+          label="Total Booking"
+          value={loadingData ? "—" : bookingsMonth.toString()}
           icon="◷"
           trend="up"
-          trendValue="12% vs bulan lalu"
+          trendValue="semua waktu"
         />
         <StatCard
-          label="Revenue Bulan Ini"
-          value="Rp 4.7jt"
+          label="Revenue"
+          value={loadingData ? "—" : revenueLabel}
           icon="◈"
           trend="up"
-          trendValue="8% vs bulan lalu"
+          trendValue="dari booking selesai"
         />
         <StatCard
-          label="Reminder Terkirim"
-          value="87"
+          label="Reminder Aktif"
+          value={loadingData ? "—" : remindersSent.toString()}
           icon="◎"
-          sub="bulan ini"
+          sub="booking confirmed"
         />
       </div>
 
-      {/* ── CONTENT GRID ── */}
+      {/* ── CONTENT ── */}
       <div className="anim-fade-up delay-2 dash-grid">
-        {/* Bookings list */}
+        {/* Bookings */}
         <div className="dash-bookings">
           <div
             style={{
@@ -276,11 +277,59 @@ export default function DashboardPage() {
               Lihat semua →
             </Link>
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-            {bookings.slice(0, 5).map((b) => (
-              <BookingCard key={b.id} {...b} />
-            ))}
-          </div>
+
+          {loadingData ? (
+            <div style={{ padding: "40px", textAlign: "center" }}>
+              <div
+                style={{
+                  width: "28px",
+                  height: "28px",
+                  borderRadius: "50%",
+                  border: "3px solid var(--border)",
+                  borderTop: "3px solid var(--accent)",
+                  margin: "0 auto 12px",
+                  animation: "spin 0.8s linear infinite",
+                }}
+              />
+              <p style={{ color: "var(--text-muted)", fontSize: "13px" }}>
+                Memuat booking...
+              </p>
+            </div>
+          ) : bookings.length === 0 ? (
+            <div
+              style={{
+                padding: "48px 20px",
+                textAlign: "center",
+                background: "var(--surface)",
+                border: "1px dashed var(--border)",
+                borderRadius: "var(--r)",
+                color: "var(--text-muted)",
+              }}
+            >
+              <p style={{ fontSize: "28px", marginBottom: "10px" }}>📋</p>
+              <p
+                style={{
+                  fontFamily: "Cabinet Grotesk, sans-serif",
+                  fontWeight: 700,
+                  fontSize: "15px",
+                  marginBottom: "6px",
+                }}
+              >
+                Belum ada booking
+              </p>
+              <p style={{ fontSize: "13px" }}>
+                Booking yang masuk akan tampil di sini.
+              </p>
+            </div>
+          ) : (
+            <div
+              style={{ display: "flex", flexDirection: "column", gap: "8px" }}
+            >
+              {bookings.slice(0, 5).map((b) => (
+                <BookingCard key={b.id} {...b} />
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Right panels */}
@@ -304,57 +353,86 @@ export default function DashboardPage() {
             >
               Jadwal Hari Ini
             </h3>
-            {[
-              "09:00",
-              "10:00",
-              "11:00",
-              "11:30",
-              "13:00",
-              "14:00",
-              "15:30",
-              "16:00",
-            ].map((t, i) => {
-              const booked = ["10:00", "11:30", "13:00"].includes(t);
-              return (
-                <div
-                  key={t}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "10px",
-                    padding: "8px 0",
-                    borderBottom: i < 7 ? "1px solid var(--border)" : "none",
-                  }}
-                >
-                  <span
-                    style={{
-                      color: "var(--text-muted)",
-                      fontSize: "12px",
-                      width: "38px",
-                      flexShrink: 0,
-                    }}
-                  >
-                    {t}
-                  </span>
-                  <div
-                    style={{
-                      flex: 1,
-                      height: "6px",
-                      borderRadius: "3px",
-                      background: booked ? "var(--accent)" : "var(--surface-3)",
-                    }}
-                  />
-                  <span
-                    style={{
-                      fontSize: "11px",
-                      color: booked ? "var(--accent)" : "var(--text-muted)",
-                    }}
-                  >
-                    {booked ? "Booked" : "Kosong"}
-                  </span>
-                </div>
-              );
-            })}
+            {loadingData ? (
+              <p
+                style={{
+                  color: "var(--text-muted)",
+                  fontSize: "13px",
+                  textAlign: "center",
+                  padding: "16px 0",
+                }}
+              >
+                Memuat...
+              </p>
+            ) : (
+              (() => {
+                const todayBookings = bookings.filter(
+                  (b) => b.date === today_date,
+                );
+                const slots = [
+                  "09:00",
+                  "10:00",
+                  "11:00",
+                  "11:30",
+                  "13:00",
+                  "14:00",
+                  "15:30",
+                  "16:00",
+                ];
+                return slots.map((t, i) => {
+                  const booked = todayBookings.some((b) => b.time === t);
+                  const bData = todayBookings.find((b) => b.time === t);
+                  return (
+                    <div
+                      key={t}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "10px",
+                        padding: "8px 0",
+                        borderBottom:
+                          i < slots.length - 1
+                            ? "1px solid var(--border)"
+                            : "none",
+                      }}
+                    >
+                      <span
+                        style={{
+                          color: "var(--text-muted)",
+                          fontSize: "12px",
+                          width: "38px",
+                          flexShrink: 0,
+                        }}
+                      >
+                        {t}
+                      </span>
+                      <div
+                        style={{
+                          flex: 1,
+                          height: "6px",
+                          borderRadius: "3px",
+                          background: booked
+                            ? "var(--accent)"
+                            : "var(--surface-3)",
+                        }}
+                      />
+                      <span
+                        style={{
+                          fontSize: "11px",
+                          color: booked ? "var(--accent)" : "var(--text-muted)",
+                          maxWidth: "80px",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {booked ? (bData?.customerName ?? "Booked") : "Kosong"}
+                      </span>
+                    </div>
+                  );
+                });
+              })()
+            )}
           </div>
 
           {/* Reminder queue */}
@@ -395,31 +473,44 @@ export default function DashboardPage() {
                 Detail →
               </Link>
             </div>
-            {reminderQueue.map((r, i) => (
-              <div
-                key={i}
+            {reminderQueue.length === 0 ? (
+              <p
                 style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  padding: "8px 0",
-                  borderBottom:
-                    i < reminderQueue.length - 1
-                      ? "1px solid var(--border)"
-                      : "none",
+                  color: "var(--text-muted)",
+                  fontSize: "13px",
+                  textAlign: "center",
+                  padding: "12px 0",
                 }}
               >
-                <div>
-                  <p style={{ fontSize: "13px", fontWeight: 500 }}>{r.name}</p>
-                  <p style={{ fontSize: "11px", color: "var(--text-muted)" }}>
-                    {r.type} · {r.time}
-                  </p>
+                Tidak ada reminder aktif
+              </p>
+            ) : (
+              reminderQueue.map((r, i) => (
+                <div
+                  key={i}
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    padding: "8px 0",
+                    borderBottom:
+                      i < reminderQueue.length - 1
+                        ? "1px solid var(--border)"
+                        : "none",
+                  }}
+                >
+                  <div>
+                    <p style={{ fontSize: "13px", fontWeight: 500 }}>
+                      {r.name}
+                    </p>
+                    <p style={{ fontSize: "11px", color: "var(--text-muted)" }}>
+                      {r.type} · {r.time}
+                    </p>
+                  </div>
+                  <Badge variant="info">{r.status}</Badge>
                 </div>
-                <Badge variant={r.status === "Terkirim" ? "success" : "info"}>
-                  {r.status}
-                </Badge>
-              </div>
-            ))}
+              ))
+            )}
           </div>
 
           {/* Quick actions */}
@@ -638,20 +729,21 @@ export default function DashboardPage() {
               </button>
               <button
                 onClick={handleAddBooking}
+                disabled={submitting}
                 style={{
                   flex: 2,
                   padding: "11px",
                   borderRadius: "var(--r-sm)",
-                  background: "var(--accent)",
+                  background: submitting ? "var(--surface-3)" : "var(--accent)",
                   border: "none",
-                  color: "#08090c",
+                  color: submitting ? "var(--text-muted)" : "#08090c",
                   fontSize: "14px",
                   fontWeight: 700,
-                  cursor: "pointer",
+                  cursor: submitting ? "not-allowed" : "pointer",
                   fontFamily: "inherit",
                 }}
               >
-                ✓ Simpan Booking
+                {submitting ? "Menyimpan..." : "✓ Simpan Booking"}
               </button>
             </div>
           </div>
@@ -659,78 +751,19 @@ export default function DashboardPage() {
       )}
 
       <style>{`
-        .dash-page {
-          padding: 36px 40px;
-          box-sizing: border-box;
-          width: 100%;
-        }
-        .dash-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: flex-start;
-          margin-bottom: 32px;
-          gap: 12px;
-        }
-        .dash-title {
-          font-family: 'Cabinet Grotesk', sans-serif;
-          font-size: 28px;
-          font-weight: 900;
-          letter-spacing: -0.5px;
-        }
-        .dash-stats {
-          display: grid;
-          grid-template-columns: repeat(4, 1fr);
-          gap: 14px;
-          margin-bottom: 28px;
-          width: 100%;
-          box-sizing: border-box;
-        }
-        .dash-grid {
-          display: grid;
-          grid-template-columns: 1fr 340px;
-          gap: 20px;
-          align-items: start;
-          width: 100%;
-          box-sizing: border-box;
-        }
-        .dash-bookings {
-          min-width: 0;
-        }
-        .dash-right {
-          display: flex;
-          flex-direction: column;
-          gap: 16px;
-          min-width: 0;
-        }
-        .date-input-light::-webkit-calendar-picker-indicator {
-          filter: invert(1) brightness(2);
-          cursor: pointer;
-          opacity: 0.7;
-        }
-        .date-input-light::-webkit-calendar-picker-indicator:hover {
-          opacity: 1;
-        }
-
-        @media (max-width: 1100px) {
-          .dash-grid { grid-template-columns: 1fr 300px; }
-        }
-        @media (max-width: 900px) {
-          .dash-grid  { grid-template-columns: 1fr; }
-          .dash-stats { grid-template-columns: repeat(2, 1fr); }
-        }
-        @media (max-width: 768px) {
-          .dash-page    { padding: 20px 16px; }
-          .dash-title   { font-size: 22px; }
-          .dash-header  { align-items: center; margin-bottom: 24px; }
-          .dash-stats   { grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 20px; }
-          .dash-grid    { grid-template-columns: 1fr; gap: 16px; }
-          .dash-bookings { width: 100%; box-sizing: border-box; overflow: hidden; }
-          .dash-right   { width: 100%; box-sizing: border-box; }
-        }
-        @media (max-width: 480px) {
-          .dash-page  { padding: 16px 12px; }
-          .dash-stats { grid-template-columns: repeat(2, 1fr); gap: 8px; }
-        }
+        .dash-page { padding: 36px 40px; box-sizing: border-box; width: 100%; }
+        .dash-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 32px; gap: 12px; }
+        .dash-title { font-family: 'Cabinet Grotesk', sans-serif; font-size: 28px; font-weight: 900; letter-spacing: -0.5px; }
+        .dash-stats { display: grid; grid-template-columns: repeat(4,1fr); gap: 14px; margin-bottom: 28px; width: 100%; box-sizing: border-box; }
+        .dash-grid { display: grid; grid-template-columns: 1fr 340px; gap: 20px; align-items: start; width: 100%; box-sizing: border-box; }
+        .dash-bookings { min-width: 0; }
+        .dash-right { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+        .date-input-light::-webkit-calendar-picker-indicator { filter: invert(1) brightness(2); cursor: pointer; opacity: 0.7; }
+        @keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+        @media (max-width: 1100px) { .dash-grid { grid-template-columns: 1fr 300px; } }
+        @media (max-width: 900px)  { .dash-grid { grid-template-columns: 1fr; } .dash-stats { grid-template-columns: repeat(2,1fr); } }
+        @media (max-width: 768px)  { .dash-page { padding: 20px 16px; } .dash-title { font-size: 22px; } .dash-header { align-items: center; margin-bottom: 24px; } .dash-stats { grid-template-columns: repeat(2,1fr); gap: 10px; margin-bottom: 20px; } .dash-grid { grid-template-columns: 1fr; gap: 16px; } .dash-bookings { width: 100%; box-sizing: border-box; overflow: hidden; } .dash-right { width: 100%; box-sizing: border-box; } }
+        @media (max-width: 480px)  { .dash-page { padding: 16px 12px; } .dash-stats { grid-template-columns: repeat(2,1fr); gap: 8px; } }
       `}</style>
     </div>
   );
@@ -745,7 +778,6 @@ const modalLabelStyle: React.CSSProperties = {
   letterSpacing: "0.5px",
   marginBottom: "7px",
 };
-
 const modalInputStyle: React.CSSProperties = {
   width: "100%",
   padding: "10px 14px",

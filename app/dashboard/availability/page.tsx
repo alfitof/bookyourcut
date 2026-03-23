@@ -1,5 +1,12 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useAuth } from "@/context/AuthContext";
+import {
+  getAvailability,
+  saveAvailability,
+  type Availability,
+  type DayAvailability,
+} from "@/lib/firestore";
 
 const DAYS = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"];
 
@@ -64,8 +71,19 @@ const initialAvail: Record<string, DayConfig> = {
 };
 
 export default function AvailabilityPage() {
-  const [avail, setAvail] = useState(initialAvail);
+  const { user } = useAuth();
+  const [avail, setAvail] = useState<Availability>({});
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    if (!user) return;
+    getAvailability(user.uid).then((data) => {
+      setAvail(data);
+      setLoading(false);
+    });
+  }, [user]);
 
   function toggle(day: string) {
     setAvail({
@@ -76,17 +94,48 @@ export default function AvailabilityPage() {
 
   function update(
     day: string,
-    field: keyof DayConfig,
+    field: keyof DayAvailability,
     value: string | boolean,
   ) {
     setAvail({ ...avail, [day]: { ...avail[day], [field]: value } });
   }
 
-  function handleSave() {
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+  async function handleSave() {
+    if (!user) return;
+    setSaving(true);
+    try {
+      await saveAvailability(user.uid, avail);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (err) {
+      console.error("Error saving availability:", err);
+    } finally {
+      setSaving(false);
+    }
   }
-
+  if (loading) {
+    return (
+      <div style={{ padding: "36px 40px" }}>
+        <div style={{ padding: "80px", textAlign: "center" }}>
+          <div
+            style={{
+              width: "28px",
+              height: "28px",
+              borderRadius: "50%",
+              border: "3px solid var(--border)",
+              borderTop: "3px solid var(--accent)",
+              margin: "0 auto 12px",
+              animation: "spin 0.8s linear infinite",
+            }}
+          />
+          <p style={{ color: "var(--text-muted)", fontSize: "14px" }}>
+            Memuat jadwal...
+          </p>
+        </div>
+        <style>{`@keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }`}</style>
+      </div>
+    );
+  }
   return (
     <div className="avail-page">
       {/* Header */}

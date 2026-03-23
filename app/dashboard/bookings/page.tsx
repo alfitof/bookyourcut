@@ -1,131 +1,14 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import BookingCard from "@/components/BookingCard";
-
-type Booking = {
-  id: number;
-  customerName: string;
-  service: string;
-  date: string;
-  time: string;
-  phone: string;
-  status: "confirmed" | "pending" | "completed" | "cancelled";
-  duration: string;
-  price: string;
-};
-
-const initialBookings: Booking[] = [
-  {
-    id: 1,
-    customerName: "Budi Santoso",
-    service: "Haircut",
-    date: "21 Jun 2025",
-    time: "10:00",
-    phone: "0812-3456-7890",
-    status: "confirmed",
-    duration: "30 mnt",
-    price: "Rp 50rb",
-  },
-  {
-    id: 2,
-    customerName: "Reza Firmansyah",
-    service: "Haircut + Beard",
-    date: "21 Jun 2025",
-    time: "11:30",
-    phone: "0813-2233-4455",
-    status: "confirmed",
-    duration: "45 mnt",
-    price: "Rp 75rb",
-  },
-  {
-    id: 3,
-    customerName: "Dani Prasetyo",
-    service: "Haircut",
-    date: "21 Jun 2025",
-    time: "13:00",
-    phone: "0857-9988-7766",
-    status: "pending",
-    duration: "30 mnt",
-    price: "Rp 50rb",
-  },
-  {
-    id: 4,
-    customerName: "Hendra Wijaya",
-    service: "Coloring",
-    date: "22 Jun 2025",
-    time: "09:00",
-    phone: "0821-5544-3322",
-    status: "confirmed",
-    duration: "90 mnt",
-    price: "Rp 150rb",
-  },
-  {
-    id: 5,
-    customerName: "Fajar Nugroho",
-    service: "Haircut",
-    date: "22 Jun 2025",
-    time: "14:00",
-    phone: "0878-1122-3344",
-    status: "confirmed",
-    duration: "30 mnt",
-    price: "Rp 50rb",
-  },
-  {
-    id: 6,
-    customerName: "Andi Kurniawan",
-    service: "Haircut + Beard",
-    date: "20 Jun 2025",
-    time: "10:00",
-    phone: "0811-9988-1234",
-    status: "completed",
-    duration: "45 mnt",
-    price: "Rp 75rb",
-  },
-  {
-    id: 7,
-    customerName: "Surya Darma",
-    service: "Haircut",
-    date: "20 Jun 2025",
-    time: "15:00",
-    phone: "0852-4433-5566",
-    status: "cancelled",
-    duration: "30 mnt",
-    price: "Rp 50rb",
-  },
-  {
-    id: 8,
-    customerName: "Rizal Mahmud",
-    service: "Coloring",
-    date: "19 Jun 2025",
-    time: "11:00",
-    phone: "0819-7766-5544",
-    status: "completed",
-    duration: "90 mnt",
-    price: "Rp 150rb",
-  },
-  {
-    id: 9,
-    customerName: "Bagas Pratama",
-    service: "Keramas",
-    date: "19 Jun 2025",
-    time: "09:30",
-    phone: "0856-1234-5678",
-    status: "completed",
-    duration: "15 mnt",
-    price: "Rp 25rb",
-  },
-  {
-    id: 10,
-    customerName: "Yoga Santosa",
-    service: "Haircut",
-    date: "18 Jun 2025",
-    time: "13:00",
-    phone: "0877-8765-4321",
-    status: "cancelled",
-    duration: "30 mnt",
-    price: "Rp 50rb",
-  },
-];
+import { useAuth } from "@/context/AuthContext";
+import {
+  getBookings,
+  addBooking,
+  updateBookingStatus,
+  deleteBooking,
+  type Booking,
+} from "@/lib/firestore";
 
 const SERVICES = ["Haircut", "Haircut + Beard", "Coloring", "Keramas"];
 const SLOTS = [
@@ -145,6 +28,13 @@ const SLOTS = [
   "16:30",
 ];
 
+const SERVICE_INFO: Record<string, { duration: string; price: string }> = {
+  Haircut: { duration: "30 mnt", price: "Rp 50rb" },
+  "Haircut + Beard": { duration: "45 mnt", price: "Rp 75rb" },
+  Coloring: { duration: "90 mnt", price: "Rp 150rb" },
+  Keramas: { duration: "15 mnt", price: "Rp 25rb" },
+};
+
 const filters = ["Semua", "confirmed", "pending", "completed", "cancelled"];
 const filterLabels: Record<string, string> = {
   Semua: "Semua",
@@ -155,10 +45,13 @@ const filterLabels: Record<string, string> = {
 };
 
 export default function BookingsPage() {
-  const [bookings, setBookings] = useState<Booking[]>(initialBookings);
+  const { user } = useAuth();
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [loading, setLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState("Semua");
   const [search, setSearch] = useState("");
   const [showModal, setShowModal] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({
     name: "",
     phone: "",
@@ -167,6 +60,22 @@ export default function BookingsPage() {
     time: SLOTS[0],
   });
   const [formError, setFormError] = useState("");
+
+  useEffect(() => {
+    if (!user) return;
+    fetchBookings();
+  }, [user]);
+
+  async function fetchBookings() {
+    if (!user) return;
+    setLoading(true);
+    try {
+      const data = await getBookings(user.uid);
+      setBookings(data);
+    } finally {
+      setLoading(false);
+    }
+  }
 
   const filtered = bookings.filter((b) => {
     const matchFilter = activeFilter === "Semua" || b.status === activeFilter;
@@ -183,31 +92,38 @@ export default function BookingsPage() {
     total: bookings.length,
     confirmed: bookings.filter((b) => b.status === "confirmed").length,
     pending: bookings.filter((b) => b.status === "pending").length,
-    revenue: "Rp 675rb",
+    revenue: (() => {
+      const total = bookings
+        .filter((b) => b.status === "completed")
+        .reduce(
+          (acc, b) => acc + (parseInt(b.price.replace(/\D/g, "")) || 0),
+          0,
+        );
+      return total >= 1000000
+        ? `Rp ${(total / 1000000).toFixed(1)}jt`
+        : total >= 1000
+          ? `Rp ${(total / 1000).toFixed(0)}rb`
+          : `Rp ${total}`;
+    })(),
   };
 
-  function handleAddBooking() {
+  async function handleAddBooking() {
+    if (!user) return;
     if (!form.name.trim() || !form.phone.trim() || !form.date) {
       setFormError("Nama, nomor HP, dan tanggal wajib diisi.");
       return;
     }
     setFormError("");
-    const dateObj = new Date(form.date);
-    const formatted = dateObj.toLocaleDateString("id-ID", {
-      day: "numeric",
-      month: "short",
-      year: "numeric",
-    });
-    const serviceInfo: Record<string, { duration: string; price: string }> = {
-      Haircut: { duration: "30 mnt", price: "Rp 50rb" },
-      "Haircut + Beard": { duration: "45 mnt", price: "Rp 75rb" },
-      Coloring: { duration: "90 mnt", price: "Rp 150rb" },
-      Keramas: { duration: "15 mnt", price: "Rp 25rb" },
-    };
-    const info = serviceInfo[form.service] ?? { duration: "—", price: "—" };
-    setBookings([
-      {
-        id: Date.now(),
+    setSubmitting(true);
+    try {
+      const dateObj = new Date(form.date);
+      const formatted = dateObj.toLocaleDateString("id-ID", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      });
+      const info = SERVICE_INFO[form.service] ?? { duration: "—", price: "—" };
+      await addBooking(user.uid, {
         customerName: form.name,
         service: form.service,
         date: formatted,
@@ -216,17 +132,21 @@ export default function BookingsPage() {
         status: "confirmed",
         duration: info.duration,
         price: info.price,
-      },
-      ...bookings,
-    ]);
-    setForm({
-      name: "",
-      phone: "",
-      service: SERVICES[0],
-      date: "",
-      time: SLOTS[0],
-    });
-    setShowModal(false);
+      });
+      await fetchBookings();
+      setForm({
+        name: "",
+        phone: "",
+        service: SERVICES[0],
+        date: "",
+        time: SLOTS[0],
+      });
+      setShowModal(false);
+    } catch (err) {
+      setFormError("Gagal menambahkan booking.");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   function handleCloseModal() {
@@ -243,12 +163,12 @@ export default function BookingsPage() {
 
   return (
     <div className="bookings-page">
-      {/* ── HEADER ── */}
+      {/* Header */}
       <div className="anim-fade-up bookings-header">
         <div>
           <h1 className="bookings-title">Semua Booking</h1>
           <p style={{ color: "var(--text-dim)", fontSize: "14px" }}>
-            {bookings.length} total · 7 hari terakhir
+            {loading ? "Memuat..." : `${bookings.length} total booking`}
           </p>
         </div>
         <button
@@ -270,13 +190,29 @@ export default function BookingsPage() {
         </button>
       </div>
 
-      {/* ── MINI STATS ── */}
+      {/* Stats */}
       <div className="anim-fade-up delay-1 booking-stats">
         {[
-          { label: "Total", value: counts.total, color: "var(--text)" },
-          { label: "Confirmed", value: counts.confirmed, color: "#22c55e" },
-          { label: "Pending", value: counts.pending, color: "#f97316" },
-          { label: "Revenue", value: counts.revenue, color: "var(--accent)" },
+          {
+            label: "Total",
+            value: loading ? "—" : counts.total,
+            color: "var(--text)",
+          },
+          {
+            label: "Confirmed",
+            value: loading ? "—" : counts.confirmed,
+            color: "#22c55e",
+          },
+          {
+            label: "Pending",
+            value: loading ? "—" : counts.pending,
+            color: "#f97316",
+          },
+          {
+            label: "Revenue",
+            value: loading ? "—" : counts.revenue,
+            color: "var(--accent)",
+          },
         ].map((s) => (
           <div key={s.label} className="booking-stat-card">
             <p className="booking-stat-label">{s.label}</p>
@@ -287,7 +223,7 @@ export default function BookingsPage() {
         ))}
       </div>
 
-      {/* ── SEARCH ── */}
+      {/* Search */}
       <div className="anim-fade-up delay-2 search-wrap">
         <div style={{ position: "relative" }}>
           <span
@@ -343,7 +279,7 @@ export default function BookingsPage() {
         </div>
       </div>
 
-      {/* ── FILTER PILLS ── */}
+      {/* Filter */}
       <div className="anim-fade-up delay-2 filter-wrap">
         <div className="filter-pills">
           {filters.map((f) => (
@@ -358,18 +294,42 @@ export default function BookingsPage() {
         </div>
       </div>
 
-      {/* ── RESULT COUNT ── */}
+      {/* Result count */}
       {(search || activeFilter !== "Semua") && (
         <p className="result-count">
-          {filtered.length} hasil
-          {search ? ` untuk "${search}"` : ""}
+          {filtered.length} hasil{search ? ` untuk "${search}"` : ""}
           {activeFilter !== "Semua" ? ` · ${filterLabels[activeFilter]}` : ""}
         </p>
       )}
 
-      {/* ── LIST ── */}
+      {/* List */}
       <div className="anim-fade-up delay-3 bookings-list">
-        {filtered.length === 0 ? (
+        {loading ? (
+          <div
+            style={{
+              padding: "60px",
+              textAlign: "center",
+              background: "var(--surface)",
+              borderRadius: "var(--r)",
+              border: "1px solid var(--border)",
+            }}
+          >
+            <div
+              style={{
+                width: "28px",
+                height: "28px",
+                borderRadius: "50%",
+                border: "3px solid var(--border)",
+                borderTop: "3px solid var(--accent)",
+                margin: "0 auto 12px",
+                animation: "spin 0.8s linear infinite",
+              }}
+            />
+            <p style={{ color: "var(--text-muted)", fontSize: "14px" }}>
+              Memuat booking...
+            </p>
+          </div>
+        ) : filtered.length === 0 ? (
           <div className="empty-state">
             <p style={{ fontSize: "32px", marginBottom: "12px" }}>◎</p>
             <p
@@ -380,10 +340,14 @@ export default function BookingsPage() {
                 marginBottom: "6px",
               }}
             >
-              Tidak ada booking
+              {search || activeFilter !== "Semua"
+                ? "Tidak ada booking"
+                : "Belum ada booking"}
             </p>
             <p style={{ fontSize: "14px" }}>
-              Coba ubah filter atau kata kunci pencarian.
+              {search || activeFilter !== "Semua"
+                ? "Coba ubah filter atau pencarian."
+                : "Booking yang masuk akan tampil di sini."}
             </p>
           </div>
         ) : (
@@ -391,7 +355,7 @@ export default function BookingsPage() {
         )}
       </div>
 
-      {/* ── MODAL BOOKING MANUAL ── */}
+      {/* Modal */}
       {showModal && (
         <div
           style={{
@@ -419,7 +383,6 @@ export default function BookingsPage() {
               padding: "28px",
             }}
           >
-            {/* Modal header */}
             <div
               style={{
                 display: "flex",
@@ -433,7 +396,6 @@ export default function BookingsPage() {
                   fontFamily: "Cabinet Grotesk, sans-serif",
                   fontWeight: 900,
                   fontSize: "20px",
-                  letterSpacing: "-0.3px",
                 }}
               >
                 Booking Manual
@@ -453,8 +415,6 @@ export default function BookingsPage() {
                 ✕
               </button>
             </div>
-
-            {/* Error */}
             {formError && (
               <div
                 style={{
@@ -470,50 +430,44 @@ export default function BookingsPage() {
                 {formError}
               </div>
             )}
-
-            {/* Form fields */}
             <div
               style={{ display: "flex", flexDirection: "column", gap: "14px" }}
             >
               <div>
-                <label style={modalLabelStyle}>Nama Customer *</label>
+                <label style={mLabel}>Nama Customer *</label>
                 <input
                   type="text"
                   placeholder="cth: Budi Santoso"
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  style={modalInputStyle}
+                  style={mInput}
                   autoFocus
                 />
               </div>
-
               <div>
-                <label style={modalLabelStyle}>Nomor WhatsApp *</label>
+                <label style={mLabel}>Nomor WhatsApp *</label>
                 <input
                   type="tel"
                   placeholder="cth: 08123456789"
                   value={form.phone}
                   onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                  style={modalInputStyle}
+                  style={mInput}
                 />
               </div>
-
               <div>
-                <label style={modalLabelStyle}>Layanan</label>
+                <label style={mLabel}>Layanan</label>
                 <select
                   value={form.service}
                   onChange={(e) =>
                     setForm({ ...form, service: e.target.value })
                   }
-                  style={modalInputStyle}
+                  style={mInput}
                 >
                   {SERVICES.map((s) => (
                     <option key={s}>{s}</option>
                   ))}
                 </select>
               </div>
-
-              {/* Tanggal & Jam — dengan date input icon putih */}
               <div
                 style={{
                   display: "grid",
@@ -522,21 +476,21 @@ export default function BookingsPage() {
                 }}
               >
                 <div>
-                  <label style={modalLabelStyle}>Tanggal *</label>
+                  <label style={mLabel}>Tanggal *</label>
                   <input
                     type="date"
                     value={form.date}
                     onChange={(e) => setForm({ ...form, date: e.target.value })}
                     className="date-input-light"
-                    style={modalInputStyle}
+                    style={mInput}
                   />
                 </div>
                 <div>
-                  <label style={modalLabelStyle}>Jam</label>
+                  <label style={mLabel}>Jam</label>
                   <select
                     value={form.time}
                     onChange={(e) => setForm({ ...form, time: e.target.value })}
-                    style={modalInputStyle}
+                    style={mInput}
                   >
                     {SLOTS.map((s) => (
                       <option key={s}>{s}</option>
@@ -545,8 +499,6 @@ export default function BookingsPage() {
                 </div>
               </div>
             </div>
-
-            {/* Buttons */}
             <div style={{ display: "flex", gap: "10px", marginTop: "24px" }}>
               <button
                 onClick={handleCloseModal}
@@ -567,20 +519,21 @@ export default function BookingsPage() {
               </button>
               <button
                 onClick={handleAddBooking}
+                disabled={submitting}
                 style={{
                   flex: 2,
                   padding: "11px",
                   borderRadius: "var(--r-sm)",
-                  background: "var(--accent)",
+                  background: submitting ? "var(--surface-3)" : "var(--accent)",
                   border: "none",
-                  color: "#08090c",
+                  color: submitting ? "var(--text-muted)" : "#08090c",
                   fontSize: "14px",
                   fontWeight: 700,
-                  cursor: "pointer",
+                  cursor: submitting ? "not-allowed" : "pointer",
                   fontFamily: "inherit",
                 }}
               >
-                ✓ Simpan Booking
+                {submitting ? "Menyimpan..." : "✓ Simpan Booking"}
               </button>
             </div>
           </div>
@@ -588,175 +541,32 @@ export default function BookingsPage() {
       )}
 
       <style>{`
-        /* ── BASE ── */
-        .bookings-page {
-          padding: 36px 40px;
-          box-sizing: border-box;
-          width: 100%;
-        }
-        .bookings-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: flex-start;
-          margin-bottom: 24px;
-          gap: 12px;
-        }
-        .bookings-title {
-          font-family: 'Cabinet Grotesk', sans-serif;
-          font-size: 28px;
-          font-weight: 900;
-          letter-spacing: -0.5px;
-          margin-bottom: 6px;
-        }
-
-        /* ── STATS ── */
-        .booking-stats {
-          display: grid;
-          grid-template-columns: repeat(4, 1fr);
-          gap: 12px;
-          margin-bottom: 16px;
-          width: 100%;
-          box-sizing: border-box;
-        }
-        .booking-stat-card {
-          padding: 16px 20px;
-          border-radius: var(--r);
-          background: var(--surface);
-          border: 1px solid var(--border);
-          box-sizing: border-box;
-          min-width: 0;
-        }
-        .booking-stat-label {
-          color: var(--text-muted);
-          font-size: 11px;
-          text-transform: uppercase;
-          letter-spacing: 0.8px;
-          margin-bottom: 6px;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-        .booking-stat-value {
-          font-family: 'Cabinet Grotesk', sans-serif;
-          font-weight: 900;
-          font-size: 22px;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-
-        /* ── SEARCH ── */
-        .search-wrap {
-          margin-bottom: 10px;
-          width: 100%;
-          box-sizing: border-box;
-        }
-
-        /* ── FILTER — tidak full width, hanya fit content ── */
-        .filter-wrap {
-          margin-top: 0.5rem;
-          margin-bottom: 18px;
-          max-width: 100%;
-          overflow-x: auto;
-          -webkit-overflow-scrolling: touch;
-          /* kunci: jangan stretch ke full width */
-          display: flex;
-        }
+        .bookings-page { padding: 36px 40px; box-sizing: border-box; width: 100%; }
+        .bookings-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; gap: 12px; }
+        .bookings-title { font-family: 'Cabinet Grotesk', sans-serif; font-size: 28px; font-weight: 900; letter-spacing: -0.5px; margin-bottom: 6px; }
+        .booking-stats { display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; margin-bottom: 16px; width: 100%; box-sizing: border-box; }
+        .booking-stat-card { padding: 16px 20px; border-radius: var(--r); background: var(--surface); border: 1px solid var(--border); box-sizing: border-box; min-width: 0; }
+        .booking-stat-label { color: var(--text-muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .booking-stat-value { font-family: 'Cabinet Grotesk', sans-serif; font-weight: 900; font-size: 22px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .search-wrap { margin-bottom: 10px; width: 100%; box-sizing: border-box; }
+        .filter-wrap { margin-top: 0.5rem; margin-bottom: 18px; max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; display: flex; }
         .filter-wrap::-webkit-scrollbar { display: none; }
-        .filter-pills {
-          display: inline-flex;
-          flex-wrap: nowrap;
-          gap: 6px;
-          padding: 4px;
-          border-radius: var(--r-sm);
-          background: var(--surface);
-          border: 1px solid var(--border);
-          /* fit content, tidak full width */
-          width: fit-content;
-          flex-shrink: 0;
-        }
-        .filter-pill {
-          padding: 7px 14px;
-          border-radius: 6px;
-          border: none;
-          background: transparent;
-          color: var(--text-dim);
-          font-size: 13px;
-          font-weight: 400;
-          cursor: pointer;
-          transition: all 0.15s;
-          white-space: nowrap;
-          font-family: inherit;
-          flex-shrink: 0;
-        }
-        .filter-pill-active {
-          background: var(--accent);
-          color: #08090c;
-          font-weight: 700;
-        }
-
-        /* ── RESULT COUNT ── */
-        .result-count {
-          color: var(--text-muted);
-          font-size: 13px;
-          margin-bottom: 12px;
-        }
-
-        /* ── LIST ── */
-        .bookings-list {
-          display: flex;
-          flex-direction: column;
-          gap: 8px;
-          width: 100%;
-        }
-        .empty-state {
-          padding: 60px 20px;
-          text-align: center;
-          color: var(--text-muted);
-          background: var(--surface);
-          border-radius: var(--r);
-          border: 1px solid var(--border);
-        }
-
-        /* ── DATE INPUT — icon kalender cerah ── */
-        .date-input-light::-webkit-calendar-picker-indicator {
-          filter: invert(1) brightness(2);
-          cursor: pointer;
-          opacity: 0.7;
-        }
-        .date-input-light::-webkit-calendar-picker-indicator:hover {
-          opacity: 1;
-        }
-
-        /* ── RESPONSIVE ── */
-        @media (max-width: 768px) {
-          .bookings-page { padding: 20px 16px; }
-          .bookings-title { font-size: 22px; }
-          .bookings-header { align-items: center; }
-          .booking-stats {
-            grid-template-columns: repeat(2, 1fr);
-            gap: 8px;
-          }
-          .booking-stat-card { padding: 14px 16px; }
-          .booking-stat-value { font-size: 20px; }
-        }
-
-        @media (max-width: 480px) {
-          .bookings-page { padding: 16px 12px; }
-          .booking-stats {
-            grid-template-columns: repeat(2, 1fr);
-            gap: 8px;
-          }
-          .booking-stat-card { padding: 12px 14px; }
-          .booking-stat-label { font-size: 10px; }
-          .booking-stat-value { font-size: 18px; }
-        }
+        .filter-pills { display: inline-flex; flex-wrap: nowrap; gap: 6px; padding: 4px; border-radius: var(--r-sm); background: var(--surface); border: 1px solid var(--border); width: fit-content; flex-shrink: 0; }
+        .filter-pill { padding: 7px 14px; border-radius: 6px; border: none; background: transparent; color: var(--text-dim); font-size: 13px; font-weight: 400; cursor: pointer; transition: all 0.15s; white-space: nowrap; font-family: inherit; flex-shrink: 0; }
+        .filter-pill-active { background: var(--accent); color: #08090c; font-weight: 700; }
+        .result-count { color: var(--text-muted); font-size: 13px; margin-bottom: 12px; }
+        .bookings-list { display: flex; flex-direction: column; gap: 8px; width: 100%; }
+        .empty-state { padding: 60px 20px; text-align: center; color: var(--text-muted); background: var(--surface); border-radius: var(--r); border: 1px solid var(--border); }
+        .date-input-light::-webkit-calendar-picker-indicator { filter: invert(1) brightness(2); cursor: pointer; opacity: 0.7; }
+        @keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+        @media (max-width: 768px) { .bookings-page { padding: 20px 16px; } .bookings-title { font-size: 22px; } .bookings-header { align-items: center; } .booking-stats { grid-template-columns: repeat(2,1fr); gap: 8px; } .booking-stat-card { padding: 14px 16px; } .booking-stat-value { font-size: 20px; } }
+        @media (max-width: 480px) { .bookings-page { padding: 16px 12px; } .booking-stats { grid-template-columns: repeat(2,1fr); gap: 8px; } .booking-stat-card { padding: 12px 14px; } .booking-stat-label { font-size: 10px; } .booking-stat-value { font-size: 18px; } }
       `}</style>
     </div>
   );
 }
 
-const modalLabelStyle: React.CSSProperties = {
+const mLabel: React.CSSProperties = {
   display: "block",
   color: "var(--text-muted)",
   fontSize: "12px",
@@ -765,8 +575,7 @@ const modalLabelStyle: React.CSSProperties = {
   letterSpacing: "0.5px",
   marginBottom: "7px",
 };
-
-const modalInputStyle: React.CSSProperties = {
+const mInput: React.CSSProperties = {
   width: "100%",
   padding: "10px 14px",
   borderRadius: "var(--r-sm)",
