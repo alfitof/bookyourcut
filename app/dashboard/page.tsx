@@ -4,6 +4,7 @@ import Link from "next/link";
 import StatCard from "@/components/StatCard";
 import BookingCard from "@/components/BookingCard";
 import Badge from "@/components/Badge";
+import { useAuth } from "@/context/AuthContext";
 
 const initialBookings = [
   {
@@ -98,6 +99,7 @@ const SLOTS = [
 ];
 
 export default function DashboardPage() {
+  const { user } = useAuth();
   const [bookings, setBookings] = useState(initialBookings);
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({
@@ -186,7 +188,9 @@ export default function DashboardPage() {
               {today}
             </p>
           )}
-          <h1 className="dash-title">Selamat datang, Alfito 👋</h1>
+          <h1 className="dash-title">
+            Selamat datang, {user?.displayName ?? "Barber"} 👋
+          </h1>
         </div>
         <button
           onClick={() => setShowModal(true)}

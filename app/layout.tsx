@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import "./global.css";
+import { AuthProvider } from "@/context/AuthContext";
 
 export const metadata: Metadata = {
   title: "BookYourCut — Booking & Reminder Otomatis",
-  description: "Sistem booking modern untuk barber, dokter, dan freelancer.",
+  description: "Sistem booking modern untuk barber shop.",
 };
 
 export default function RootLayout({
@@ -13,7 +14,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="id">
-      <body>{children}</body>
+      <body>
+        <AuthProvider>{children}</AuthProvider>
+      </body>
     </html>
   );
 }

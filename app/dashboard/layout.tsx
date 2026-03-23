@@ -1,6 +1,8 @@
 "use client";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
+import { logoutUser } from "@/lib/auth";
 
 export default function DashboardLayout({
   children,
@@ -8,12 +10,29 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
+  const router = useRouter();
+
+  async function handleLogout() {
+    setLoggingOut(true);
+    try {
+      await logoutUser();
+      router.push("/login");
+    } catch {
+      setLoggingOut(false);
+    }
+  }
 
   return (
     <div
       style={{ display: "flex", minHeight: "100vh", background: "var(--bg)" }}
     >
-      <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <Sidebar
+        open={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        onLogout={handleLogout}
+        loggingOut={loggingOut}
+      />
 
       <div
         style={{
@@ -38,7 +57,6 @@ export default function DashboardLayout({
             zIndex: 50,
           }}
         >
-          {/* Hamburger button */}
           <button
             onClick={() => setSidebarOpen(true)}
             style={{
@@ -90,7 +108,6 @@ export default function DashboardLayout({
             </svg>
           </button>
 
-          {/* Logo center — sama persis dengan Sidebar */}
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
             <div
               style={{
@@ -120,7 +137,6 @@ export default function DashboardLayout({
             </span>
           </div>
 
-          {/* Spacer kanan agar logo tetap center */}
           <div style={{ width: "36px", flexShrink: 0 }} />
         </div>
 
@@ -131,9 +147,7 @@ export default function DashboardLayout({
 
       <style>{`
         @media (max-width: 768px) {
-          .mobile-topbar {
-            display: flex !important;
-          }
+          .mobile-topbar { display: flex !important; }
         }
       `}</style>
     </div>

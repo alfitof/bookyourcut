@@ -10,7 +10,9 @@ import {
   Settings,
   ExternalLink,
   X,
+  LogOut,
 } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
 
 const navItems = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
@@ -21,18 +23,24 @@ const navItems = [
   { href: "/dashboard/settings", icon: Settings, label: "Settings" },
 ];
 
+interface SidebarProps {
+  open?: boolean;
+  onClose?: () => void;
+  onLogout?: () => void;
+  loggingOut?: boolean;
+}
+
 export default function Sidebar({
   open,
   onClose,
-}: {
-  open?: boolean;
-  onClose?: () => void;
-}) {
+  onLogout,
+  loggingOut,
+}: SidebarProps) {
   const pathname = usePathname();
+  const { user } = useAuth();
 
   return (
     <>
-      {/* Overlay mobile */}
       {open && (
         <div
           onClick={onClose}
@@ -101,8 +109,6 @@ export default function Sidebar({
               BookYourCut
             </span>
           </div>
-
-          {/* Close button — mobile only */}
           <button
             onClick={onClose}
             className="sidebar-close-btn"
@@ -139,10 +145,18 @@ export default function Sidebar({
               marginBottom: "2px",
             }}
           >
-            Alfito Barber
+            {user?.displayName ?? "Barber Shop"}
           </p>
-          <p style={{ color: "var(--text-muted)", fontSize: "11px" }}>
-            bookyourcut.app/book/alfito-barber
+          <p
+            style={{
+              color: "var(--text-muted)",
+              fontSize: "11px",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {user?.email ?? ""}
           </p>
         </div>
 
@@ -185,8 +199,16 @@ export default function Sidebar({
           })}
         </nav>
 
-        {/* Share link button */}
-        <div style={{ padding: "14px", borderTop: "1px solid var(--border)" }}>
+        {/* Bottom: share link + logout */}
+        <div
+          style={{
+            padding: "14px",
+            borderTop: "1px solid var(--border)",
+            display: "flex",
+            flexDirection: "column",
+            gap: "8px",
+          }}
+        >
           <Link
             href="/book/alfito-barber"
             target="_blank"
@@ -207,6 +229,31 @@ export default function Sidebar({
             <ExternalLink size={14} strokeWidth={2.5} />
             Buka Halaman Booking
           </Link>
+
+          <button
+            onClick={onLogout}
+            disabled={loggingOut}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "8px",
+              padding: "9px",
+              borderRadius: "var(--r-sm)",
+              background: "transparent",
+              border: "1px solid var(--border)",
+              color: loggingOut ? "var(--text-muted)" : "var(--red)",
+              fontSize: "13px",
+              fontWeight: 600,
+              cursor: loggingOut ? "not-allowed" : "pointer",
+              transition: "all 0.15s",
+              width: "100%",
+              fontFamily: "inherit",
+            }}
+          >
+            <LogOut size={14} />
+            {loggingOut ? "Keluar..." : "Keluar"}
+          </button>
         </div>
       </aside>
 
@@ -214,23 +261,14 @@ export default function Sidebar({
         @media (max-width: 768px) {
           .sidebar {
             position: fixed !important;
-            top: 0;
-            left: 0;
+            top: 0; left: 0;
             height: 100vh;
             transform: translateX(-100%);
             transition: transform 0.28s cubic-bezier(0.4,0,0.2,1);
           }
-          .sidebar.sidebar-open {
-            transform: translateX(0);
-          }
-          .sidebar-close-btn {
-            display: flex !important;
-            align-items: center;
-            justify-content: center;
-          }
-          .mobile-overlay {
-            display: block !important;
-          }
+          .sidebar.sidebar-open { transform: translateX(0); }
+          .sidebar-close-btn { display: flex !important; align-items: center; justify-content: center; }
+          .mobile-overlay { display: block !important; }
         }
       `}</style>
     </>
