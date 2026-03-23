@@ -112,7 +112,7 @@ function LoginForm() {
                 fontFamily: "Cabinet Grotesk, sans-serif",
                 fontWeight: 900,
                 fontSize: "18px",
-                color: "#fff",
+                color: isAdminLogin ? "#fff" : "#08090c",
                 transition: "background 0.3s",
               }}
             >
@@ -243,7 +243,11 @@ function LoginForm() {
                   : isAdminLogin
                     ? "var(--purple)"
                     : "var(--accent)",
-                color: loading ? "var(--text-muted)" : "#fff",
+                color: loading
+                  ? "var(--text-muted)"
+                  : isAdminLogin
+                    ? "#fff"
+                    : "#08090c",
                 fontSize: "15px",
                 fontWeight: 700,
                 cursor: loading ? "not-allowed" : "pointer",
