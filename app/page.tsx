@@ -139,7 +139,7 @@ export default function LandingPage() {
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-          <Link href="/book/alfito-barber" className="nav-link-ghost">
+          <Link href="/book/demo-barber" className="nav-link-ghost">
             Demo
           </Link>
           <Link href="/dashboard" className="nav-link-accent">
@@ -197,7 +197,7 @@ export default function LandingPage() {
             <Link href="/dashboard" className="btn-accent">
               Daftarkan Barber Kamu →
             </Link>
-            <Link href="/book/alfito-barber" className="btn-ghost">
+            <Link href="/book/demo-barber" className="btn-ghost">
               ▶ Coba Demo Booking
             </Link>
           </div>
