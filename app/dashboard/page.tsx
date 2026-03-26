@@ -5,7 +5,13 @@ import StatCard from "@/components/StatCard";
 import BookingCard from "@/components/BookingCard";
 import Badge from "@/components/Badge";
 import { useAuth } from "@/context/AuthContext";
-import { getBookings, addBooking, type Booking } from "@/lib/firestore";
+import {
+  getBookings,
+  addBooking,
+  type Booking,
+  getServices,
+  type Service,
+} from "@/lib/firestore";
 
 const SERVICES = ["Haircut", "Haircut + Beard", "Coloring", "Keramas"];
 const SLOTS = [
@@ -25,12 +31,15 @@ const SLOTS = [
   "16:30",
 ];
 
-const SERVICE_INFO: Record<string, { duration: string; price: string }> = {
-  Haircut: { duration: "30 mnt", price: "Rp 50rb" },
-  "Haircut + Beard": { duration: "45 mnt", price: "Rp 75rb" },
-  Coloring: { duration: "90 mnt", price: "Rp 150rb" },
-  Keramas: { duration: "15 mnt", price: "Rp 25rb" },
-};
+const todayName = [
+  "Minggu",
+  "Senin",
+  "Selasa",
+  "Rabu",
+  "Kamis",
+  "Jumat",
+  "Sabtu",
+][new Date().getDay()];
 
 export default function DashboardPage() {
   const { user } = useAuth();
@@ -48,6 +57,7 @@ export default function DashboardPage() {
   });
   const [formError, setFormError] = useState("");
   const [today, setToday] = useState("");
+  const [services, setServices] = useState<Service[]>([]);
 
   useEffect(() => {
     setToday(
@@ -63,7 +73,25 @@ export default function DashboardPage() {
   useEffect(() => {
     if (!user) return;
     fetchBookings();
+    fetchServices();
   }, [user]);
+
+  async function fetchServices() {
+    if (!user) return;
+    try {
+      const data = await getServices(user.uid);
+      setServices(data);
+    } catch (err) {
+      console.error("Error fetching services:", err);
+    }
+  }
+
+  function getServiceInfo(serviceName: string) {
+    const found = services.find((s) => s.name === serviceName);
+    return found
+      ? { duration: found.duration, price: found.price }
+      : { duration: "—", price: "—" };
+  }
 
   async function fetchBookings() {
     if (!user) return;
@@ -119,7 +147,7 @@ export default function DashboardPage() {
         month: "short",
         year: "numeric",
       });
-      const info = SERVICE_INFO[form.service] ?? { duration: "—", price: "—" };
+      const info = getServiceInfo(form.service);
 
       await addBooking(user.uid, {
         customerName: form.name,
@@ -369,17 +397,30 @@ export default function DashboardPage() {
                 const todayBookings = bookings.filter(
                   (b) => b.date === today_date,
                 );
-                const slots = [
-                  "09:00",
-                  "10:00",
-                  "11:00",
-                  "11:30",
-                  "13:00",
-                  "14:00",
-                  "15:30",
-                  "16:00",
-                ];
-                return slots.map((t, i) => {
+
+                // Kumpulkan semua slot dari booking hari ini + slot kosong umum
+                const bookedTimes = todayBookings.map((b) => b.time);
+                const allSlots = Array.from(
+                  new Set([
+                    "09:00",
+                    "09:30",
+                    "10:00",
+                    "10:30",
+                    "11:00",
+                    "11:30",
+                    "13:00",
+                    "13:30",
+                    "14:00",
+                    "14:30",
+                    "15:00",
+                    "15:30",
+                    "16:00",
+                    "16:30",
+                    ...bookedTimes,
+                  ]),
+                ).sort();
+
+                return allSlots.map((t, i) => {
                   const booked = todayBookings.some((b) => b.time === t);
                   const bData = todayBookings.find((b) => b.time === t);
                   return (
@@ -389,9 +430,9 @@ export default function DashboardPage() {
                         display: "flex",
                         alignItems: "center",
                         gap: "10px",
-                        padding: "8px 0",
+                        padding: "7px 0",
                         borderBottom:
-                          i < slots.length - 1
+                          i < allSlots.length - 1
                             ? "1px solid var(--border)"
                             : "none",
                       }}
@@ -462,7 +503,7 @@ export default function DashboardPage() {
                 ◎ Reminder Queue
               </h3>
               <Link
-                href="/dashboard/reminders"
+                href="/dashboard/bookings?filter=confirmed"
                 style={{
                   color: "var(--accent)",
                   fontSize: "12px",
@@ -672,9 +713,15 @@ export default function DashboardPage() {
                   }
                   style={modalInputStyle}
                 >
-                  {SERVICES.map((s) => (
-                    <option key={s}>{s}</option>
-                  ))}
+                  {services.length === 0 ? (
+                    <option value="">Belum ada layanan</option>
+                  ) : (
+                    services.map((s) => (
+                      <option key={s.id} value={s.name}>
+                        {s.name} · {s.price} ({s.duration})
+                      </option>
+                    ))
+                  )}
                 </select>
               </div>
               <div

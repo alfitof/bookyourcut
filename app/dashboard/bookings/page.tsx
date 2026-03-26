@@ -8,7 +8,10 @@ import {
   updateBookingStatus,
   deleteBooking,
   type Booking,
+  getServices,
+  type Service,
 } from "@/lib/firestore";
+import { useSearchParams } from "next/navigation";
 
 const SERVICES = ["Haircut", "Haircut + Beard", "Coloring", "Keramas"];
 const SLOTS = [
@@ -45,13 +48,16 @@ const filterLabels: Record<string, string> = {
 };
 
 export default function BookingsPage() {
+  const searchParams = useSearchParams();
+  const filterFromUrl = searchParams.get("filter");
   const { user } = useAuth();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeFilter, setActiveFilter] = useState("Semua");
+  const [activeFilter, setActiveFilter] = useState(filterFromUrl ?? "Semua");
   const [search, setSearch] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [services, setServices] = useState<Service[]>([]);
   const [form, setForm] = useState({
     name: "",
     phone: "",
@@ -64,7 +70,25 @@ export default function BookingsPage() {
   useEffect(() => {
     if (!user) return;
     fetchBookings();
+    fetchServices();
   }, [user]);
+
+  async function fetchServices() {
+    if (!user) return;
+    try {
+      const data = await getServices(user.uid);
+      setServices(data);
+    } catch (err) {
+      console.error("Error fetching services:", err);
+    }
+  }
+
+  function getServiceInfo(serviceName: string) {
+    const found = services.find((s) => s.name === serviceName);
+    return found
+      ? { duration: found.duration, price: found.price }
+      : { duration: "—", price: "—" };
+  }
 
   async function fetchBookings() {
     if (!user) return;
@@ -75,6 +99,17 @@ export default function BookingsPage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function handleStatusChange(
+    bookingId: string,
+    status: Booking["status"],
+  ) {
+    if (!user) return;
+    await updateBookingStatus(user.uid, bookingId, status);
+    setBookings((prev) =>
+      prev.map((b) => (b.id === bookingId ? { ...b, status } : b)),
+    );
   }
 
   const filtered = bookings.filter((b) => {
@@ -122,7 +157,7 @@ export default function BookingsPage() {
         month: "short",
         year: "numeric",
       });
-      const info = SERVICE_INFO[form.service] ?? { duration: "—", price: "—" };
+      const info = getServiceInfo(form.service);
       await addBooking(user.uid, {
         customerName: form.name,
         service: form.service,
@@ -351,7 +386,13 @@ export default function BookingsPage() {
             </p>
           </div>
         ) : (
-          filtered.map((b) => <BookingCard key={b.id} {...b} />)
+          filtered.map((b) => (
+            <BookingCard
+              key={b.id}
+              {...b}
+              onStatusChange={(status) => handleStatusChange(b.id, status)}
+            />
+          ))
         )}
       </div>
 

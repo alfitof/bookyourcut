@@ -14,6 +14,7 @@ import {
   Timestamp,
 } from "firebase/firestore";
 import { db } from "./firebase-admin";
+import { ClientData } from "./admin";
 
 // ── TYPES ──────────────────────────────────────────
 
@@ -203,4 +204,22 @@ export async function updateClientProfile(
   data: Partial<ClientProfile>,
 ) {
   await updateDoc(doc(db, "clients", uid), data);
+}
+
+// lib/firestore.ts — tambah fungsi
+export async function getClientBySlug(slug: string) {
+  const q = query(collection(db, "clients"), where("slug", "==", slug));
+  const snap = await getDocs(q);
+  if (snap.empty) return null;
+  const doc = snap.docs[0];
+  return { uid: doc.id, ...doc.data() } as ClientData & { uid: string };
+}
+
+export async function addPublicBooking(uid: string, data: Omit<Booking, "id">) {
+  const ref = await addDoc(collection(db, "clients", uid, "bookings"), {
+    ...data,
+    status: "pending",
+    createdAt: serverTimestamp(),
+  });
+  return ref.id;
 }

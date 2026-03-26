@@ -1,92 +1,33 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
 import TimeSlotPicker from "@/components/TimeSlotPicker";
+import {
+  getClientBySlug,
+  getServices,
+  getBookings,
+  addPublicBooking,
+  type Service,
+  type Booking,
+} from "@/lib/firestore";
 
-const SERVICES = [
-  {
-    id: 1,
-    name: "Haircut",
-    duration: "30 mnt",
-    price: "Rp 50.000",
-    priceNum: 50000,
-  },
-  {
-    id: 2,
-    name: "Haircut + Beard",
-    duration: "45 mnt",
-    price: "Rp 75.000",
-    priceNum: 75000,
-  },
-  {
-    id: 3,
-    name: "Coloring",
-    duration: "90 mnt",
-    price: "Rp 150.000",
-    priceNum: 150000,
-  },
-  {
-    id: 4,
-    name: "Keramas",
-    duration: "15 mnt",
-    price: "Rp 25.000",
-    priceNum: 25000,
-  },
-];
-
-const SLOTS = [
-  "09:00",
-  "09:30",
-  "10:00",
-  "10:30",
-  "11:00",
-  "11:30",
-  "13:00",
-  "13:30",
-  "14:00",
-  "14:30",
-  "15:00",
-  "15:30",
-  "16:00",
-  "16:30",
-];
-
-const BOOKED = ["10:00", "11:30", "14:00"];
-
-const DAYS_SHORT = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"];
-const MONTHS = [
-  "Jan",
-  "Feb",
-  "Mar",
-  "Apr",
-  "Mei",
-  "Jun",
-  "Jul",
-  "Agu",
-  "Sep",
-  "Okt",
-  "Nov",
-  "Des",
-];
-
-function getNext14Days() {
-  const days: Date[] = [];
-  const now = new Date();
-  for (let i = 1; i <= 14; i++) {
-    const d = new Date(now);
-    d.setDate(now.getDate() + i);
-    days.push(d);
-  }
-  return days;
-}
+const DEMO_SLUG = "demo-barber"; // ← slug demo tidak simpan ke DB
 
 export default function BookingPage() {
   const params = useParams();
   const router = useRouter();
   const slug = params.slug as string;
+  const isDemo = slug === DEMO_SLUG;
+
+  const [clientUid, setClientUid] = useState<string | null>(null);
+  const [services, setServices] = useState<Service[]>([]);
+  const [bookedSlots, setBookedSlots] = useState<string[]>([]);
+  const [loadingInit, setLoadingInit] = useState(true);
+  const [notFound, setNotFound] = useState(false);
+  const [businessName, setBusinessName] = useState("");
 
   const [step, setStep] = useState(1);
-  const [selectedService, setSelectedService] = useState<number | null>(null);
+  const [selectedService, setSelectedService] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
   const [form, setForm] = useState({
@@ -97,27 +38,116 @@ export default function BookingPage() {
   });
   const [submitting, setSubmitting] = useState(false);
 
-  const days = getNext14Days();
-  const businessName = slug
-    .split("-")
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(" ");
-  const selectedServiceData = SERVICES.find((s) => s.id === selectedService);
+  const SLOTS = [
+    "09:00",
+    "09:30",
+    "10:00",
+    "10:30",
+    "11:00",
+    "11:30",
+    "13:00",
+    "13:30",
+    "14:00",
+    "14:30",
+    "15:00",
+    "15:30",
+    "16:00",
+    "16:30",
+  ];
+
+  // Demo services fallback
+  const DEMO_SERVICES: Service[] = [
+    {
+      id: "1",
+      name: "Haircut",
+      duration: "30 mnt",
+      price: "Rp 50.000",
+      bookingCount: 0,
+      color: "#d4f72c",
+    },
+    {
+      id: "2",
+      name: "Haircut + Beard",
+      duration: "45 mnt",
+      price: "Rp 75.000",
+      bookingCount: 0,
+      color: "#60a5fa",
+    },
+    {
+      id: "3",
+      name: "Coloring",
+      duration: "90 mnt",
+      price: "Rp 150.000",
+      bookingCount: 0,
+      color: "#a78bfa",
+    },
+    {
+      id: "4",
+      name: "Keramas",
+      duration: "15 mnt",
+      price: "Rp 25.000",
+      bookingCount: 0,
+      color: "#f97316",
+    },
+  ];
+
+  useEffect(() => {
+    if (isDemo) {
+      setBusinessName("Demo Barber");
+      setServices(DEMO_SERVICES);
+      setLoadingInit(false);
+      return;
+    }
+    // Fetch real client data
+    async function init() {
+      const client = await getClientBySlug(slug);
+      if (!client) {
+        setNotFound(true);
+        setLoadingInit(false);
+        return;
+      }
+      setClientUid(client.uid);
+      setBusinessName(client.businessName);
+      const [svcs, bkgs] = await Promise.all([
+        getServices(client.uid),
+        getBookings(client.uid),
+      ]);
+      setServices(svcs);
+      // booked slots untuk hari ini (akan di-update saat date dipilih)
+      setLoadingInit(false);
+    }
+    init();
+  }, [slug]);
+
+  // Update booked slots ketika tanggal berubah
+  useEffect(() => {
+    if (!selectedDate || !clientUid) return;
+    const formatted = selectedDate.toLocaleDateString("id-ID", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+    getBookings(clientUid).then((bkgs) => {
+      const slots = bkgs
+        .filter((b) => b.date === formatted && b.status !== "cancelled")
+        .map((b) => b.time);
+      setBookedSlots(slots);
+    });
+  }, [selectedDate, clientUid]);
+
+  const selectedServiceData = services.find(
+    (s) => s.id === selectedService || s.name === selectedService,
+  );
 
   function isValidEmail(email: string) {
-    if (!email.trim()) return true; // kosong = ok (opsional)
-    const regex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
-    return regex.test(email.trim());
+    if (!email.trim()) return true;
+    return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim());
   }
 
   function isValidPhone(phone: string) {
-    if (!phone.trim()) return false; // wajib diisi
-    // hapus spasi, strip, dan tanda kurung
+    if (!phone.trim()) return false;
     const cleaned = phone.replace(/[\s\-().]/g, "");
-    // harus dimulai dengan 08 atau +628 atau 628
-    // panjang 10-15 digit
-    const regex = /^(\+62|62|0)8[1-9][0-9]{7,11}$/;
-    return regex.test(cleaned);
+    return /^(\+62|62|0)8[1-9][0-9]{7,11}$/.test(cleaned);
   }
 
   const canProceed: Record<number, boolean> = {
@@ -129,14 +159,140 @@ export default function BookingPage() {
       isValidEmail(form.email),
   };
 
-  function handleSubmit() {
+  async function handleSubmit() {
     if (!canProceed[3]) return;
     setSubmitting(true);
-    setTimeout(() => {
+
+    try {
+      if (!isDemo && clientUid) {
+        const formatted = selectedDate!.toLocaleDateString("id-ID", {
+          day: "numeric",
+          month: "short",
+          year: "numeric",
+        });
+        await addPublicBooking(clientUid, {
+          customerName: form.name,
+          service: selectedServiceData?.name ?? "",
+          date: formatted,
+          time: selectedSlot!,
+          phone: form.phone,
+          email: form.email,
+          note: form.note,
+          status: "pending",
+          duration: selectedServiceData?.duration ?? "—",
+          price: selectedServiceData?.price ?? "—",
+        });
+      }
       router.push(`/book/${slug}/success`);
-    }, 1500);
+    } catch (err) {
+      console.error("Error submitting booking:", err);
+      setSubmitting(false);
+    }
   }
 
+  // ── Loading / Not Found ──
+  if (loadingInit) {
+    return (
+      <div
+        style={{
+          minHeight: "100vh",
+          background: "var(--bg)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <div style={{ textAlign: "center" }}>
+          <div
+            style={{
+              width: "32px",
+              height: "32px",
+              borderRadius: "50%",
+              border: "3px solid var(--border)",
+              borderTop: "3px solid var(--accent)",
+              margin: "0 auto 12px",
+              animation: "spin 0.8s linear infinite",
+            }}
+          />
+          <p style={{ color: "var(--text-muted)", fontSize: "14px" }}>
+            Memuat halaman booking...
+          </p>
+        </div>
+        <style>{`@keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }`}</style>
+      </div>
+    );
+  }
+
+  if (notFound) {
+    return (
+      <div
+        style={{
+          minHeight: "100vh",
+          background: "var(--bg)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "24px",
+        }}
+      >
+        <div style={{ textAlign: "center" }}>
+          <p style={{ fontSize: "48px", marginBottom: "16px" }}>🔍</p>
+          <h1
+            style={{
+              fontFamily: "Cabinet Grotesk, sans-serif",
+              fontWeight: 900,
+              fontSize: "24px",
+              marginBottom: "10px",
+            }}
+          >
+            Halaman Tidak Ditemukan
+          </h1>
+          <p style={{ color: "var(--text-dim)", fontSize: "14px" }}>
+            Link booking{" "}
+            <code
+              style={{
+                background: "var(--surface)",
+                padding: "2px 8px",
+                borderRadius: "4px",
+              }}
+            >
+              /{slug}
+            </code>{" "}
+            tidak terdaftar.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const DAYS_SHORT = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"];
+  const MONTHS = [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "Mei",
+    "Jun",
+    "Jul",
+    "Agu",
+    "Sep",
+    "Okt",
+    "Nov",
+    "Des",
+  ];
+
+  function getNext14Days() {
+    const days: Date[] = [];
+    const now = new Date();
+    for (let i = 1; i <= 14; i++) {
+      const d = new Date(now);
+      d.setDate(now.getDate() + i);
+      days.push(d);
+    }
+    return days;
+  }
+
+  const days = getNext14Days();
   const stepLabels = ["Layanan", "Jadwal", "Data Diri"];
 
   return (
@@ -148,7 +304,26 @@ export default function BookingPage() {
         paddingBottom: "80px",
       }}
     >
-      {/* ── TOP BAR ── */}
+      {/* Demo banner */}
+      {isDemo && (
+        <div
+          style={{
+            background: "rgba(249,115,22,0.1)",
+            border: "none",
+            borderBottom: "1px solid rgba(249,115,22,0.2)",
+            padding: "10px 24px",
+            textAlign: "center",
+            color: "var(--orange)",
+            fontSize: "13px",
+            fontWeight: 500,
+          }}
+        >
+          ⚠️ Ini adalah <strong>halaman demo</strong>. Booking tidak akan
+          tersimpan.
+        </div>
+      )}
+
+      {/* Top bar */}
       <div
         className="book-topbar"
         style={{
@@ -163,7 +338,6 @@ export default function BookingPage() {
           zIndex: 50,
         }}
       >
-        {/* Brand */}
         <div
           style={{
             width: "36px",
@@ -193,10 +367,9 @@ export default function BookingPage() {
             {businessName}
           </p>
           <p style={{ color: "var(--text-muted)", fontSize: "12px" }}>
-            Booking online
+            Booking online{isDemo ? " · Demo" : ""}
           </p>
         </div>
-
         {/* Step indicator */}
         <div
           style={{
@@ -245,7 +418,7 @@ export default function BookingPage() {
               {s < 3 && (
                 <div
                   style={{
-                    width: "20px",
+                    width: "24px",
                     height: "1px",
                     background: step > s ? "var(--accent)" : "var(--border)",
                     transition: "background 0.3s",
@@ -257,7 +430,7 @@ export default function BookingPage() {
         </div>
       </div>
 
-      {/* ── STEP LABEL BAR ── */}
+      {/* Step label bar */}
       <div
         style={{
           display: "flex",
@@ -298,12 +471,12 @@ export default function BookingPage() {
         })}
       </div>
 
-      {/* ── MAIN CONTENT ── */}
+      {/* Content */}
       <div
         className="book-content"
         style={{ maxWidth: "600px", margin: "0 auto", padding: "32px 24px" }}
       >
-        {/* ════ STEP 1 — PILIH LAYANAN ════ */}
+        {/* STEP 1 */}
         {step === 1 && (
           <div className="anim-fade-up">
             <h2
@@ -323,14 +496,14 @@ export default function BookingPage() {
                 marginBottom: "24px",
               }}
             >
-              Apa yang ingin kamu booking hari ini?
+              Apa yang ingin kamu booking?
             </p>
-
             <div
               style={{ display: "flex", flexDirection: "column", gap: "10px" }}
             >
-              {SERVICES.map((s) => {
-                const active = selectedService === s.id;
+              {services.map((s) => {
+                const active =
+                  selectedService === s.id || selectedService === s.name;
                 return (
                   <div
                     key={s.id}
@@ -411,7 +584,7 @@ export default function BookingPage() {
           </div>
         )}
 
-        {/* ════ STEP 2 — PILIH TANGGAL & JAM ════ */}
+        {/* STEP 2 */}
         {step === 2 && (
           <div className="anim-fade-up">
             <h2
@@ -434,8 +607,7 @@ export default function BookingPage() {
               {selectedServiceData?.name} · {selectedServiceData?.duration} ·{" "}
               {selectedServiceData?.price}
             </p>
-
-            {/* Date picker */}
+            {/* Date */}
             <div style={{ marginBottom: "28px" }}>
               <p style={sectionLabelStyle}>Tanggal</p>
               <div
@@ -511,8 +683,7 @@ export default function BookingPage() {
                 })}
               </div>
             </div>
-
-            {/* Time slots */}
+            {/* Slots */}
             {selectedDate ? (
               <div className="anim-fade-in">
                 <div
@@ -525,12 +696,12 @@ export default function BookingPage() {
                 >
                   <p style={sectionLabelStyle}>Jam Tersedia</p>
                   <p style={{ color: "var(--text-muted)", fontSize: "12px" }}>
-                    {SLOTS.length - BOOKED.length} slot kosong
+                    {SLOTS.length - bookedSlots.length} slot kosong
                   </p>
                 </div>
                 <TimeSlotPicker
                   slots={SLOTS}
-                  bookedSlots={BOOKED}
+                  bookedSlots={bookedSlots}
                   selected={selectedSlot}
                   onSelect={setSelectedSlot}
                 />
@@ -622,7 +793,7 @@ export default function BookingPage() {
           </div>
         )}
 
-        {/* ════ STEP 3 — DATA DIRI ════ */}
+        {/* STEP 3 */}
         {step === 3 && (
           <div className="anim-fade-up">
             <h2
@@ -644,8 +815,7 @@ export default function BookingPage() {
             >
               Hampir selesai! Isi info kamu dulu ya.
             </p>
-
-            {/* Booking summary card */}
+            {/* Summary */}
             <div
               style={{
                 padding: "16px 18px",
@@ -653,73 +823,46 @@ export default function BookingPage() {
                 background: "var(--accent-muted)",
                 border: "1px solid var(--accent-border)",
                 marginBottom: "24px",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "flex-start",
               }}
             >
-              <p
-                style={{
-                  color: "var(--accent)",
-                  fontSize: "11px",
-                  fontWeight: 600,
-                  textTransform: "uppercase",
-                  letterSpacing: "0.5px",
-                  marginBottom: "10px",
-                }}
-              >
-                Ringkasan Booking
-              </p>
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "flex-start",
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "4px",
-                  }}
-                >
-                  <p
-                    style={{
-                      fontFamily: "Cabinet Grotesk, sans-serif",
-                      fontWeight: 800,
-                      fontSize: "16px",
-                      color: "var(--text)",
-                    }}
-                  >
-                    {selectedServiceData?.name}
-                  </p>
-                  <p style={{ color: "var(--text-dim)", fontSize: "13px" }}>
-                    📅{" "}
-                    {selectedDate?.toLocaleDateString("id-ID", {
-                      weekday: "long",
-                      day: "numeric",
-                      month: "long",
-                      year: "numeric",
-                    })}
-                  </p>
-                  <p style={{ color: "var(--text-dim)", fontSize: "13px" }}>
-                    🕐 {selectedSlot} · {selectedServiceData?.duration}
-                  </p>
-                </div>
+              <div>
                 <p
                   style={{
                     fontFamily: "Cabinet Grotesk, sans-serif",
-                    fontWeight: 900,
-                    fontSize: "20px",
+                    fontWeight: 700,
+                    fontSize: "14px",
                     color: "var(--accent)",
-                    flexShrink: 0,
-                    marginLeft: "12px",
                   }}
                 >
-                  {selectedServiceData?.price}
+                  {selectedServiceData?.name}
+                </p>
+                <p style={{ color: "var(--text-dim)", fontSize: "13px" }}>
+                  📅{" "}
+                  {selectedDate?.toLocaleDateString("id-ID", {
+                    weekday: "long",
+                    day: "numeric",
+                    month: "long",
+                  })}{" "}
+                  · 🕐 {selectedSlot}
                 </p>
               </div>
+              <p
+                style={{
+                  fontFamily: "Cabinet Grotesk, sans-serif",
+                  fontWeight: 900,
+                  fontSize: "18px",
+                  color: "var(--accent)",
+                  flexShrink: 0,
+                  marginLeft: "12px",
+                }}
+              >
+                {selectedServiceData?.price}
+              </p>
             </div>
-
-            {/* Form fields */}
+            {/* Form */}
             <div
               style={{ display: "flex", flexDirection: "column", gap: "14px" }}
             >
@@ -735,7 +878,6 @@ export default function BookingPage() {
                   style={formInputStyle}
                 />
               </div>
-
               <div>
                 <label style={formLabelStyle}>
                   Nomor WhatsApp <span style={{ color: "var(--red)" }}>*</span>
@@ -751,18 +893,8 @@ export default function BookingPage() {
                       form.phone && !isValidPhone(form.phone)
                         ? "1px solid rgba(244,63,94,0.6)"
                         : "1px solid var(--border)",
-                    transition: "border-color 0.2s",
                   }}
                 />
-                <p
-                  style={{
-                    color: "var(--text-muted)",
-                    fontSize: "11px",
-                    marginTop: "5px",
-                  }}
-                >
-                  Reminder akan dikirim ke nomor ini via WhatsApp.
-                </p>
                 {form.phone && !isValidPhone(form.phone) && (
                   <p
                     style={{
@@ -771,12 +903,10 @@ export default function BookingPage() {
                       marginTop: "5px",
                     }}
                   >
-                    Nomor tidak valid. Gunakan format: 08xx, +628xx, atau 628xx
-                    (10–13 digit)
+                    Format tidak valid. Gunakan: 08xx, +628xx, atau 628xx
                   </p>
                 )}
               </div>
-
               <div>
                 <label style={formLabelStyle}>
                   Email{" "}
@@ -802,7 +932,6 @@ export default function BookingPage() {
                       form.email && !isValidEmail(form.email)
                         ? "1px solid rgba(244,63,94,0.6)"
                         : "1px solid var(--border)",
-                    transition: "border-color 0.2s",
                   }}
                 />
                 {form.email && !isValidEmail(form.email) && (
@@ -817,7 +946,6 @@ export default function BookingPage() {
                   </p>
                 )}
               </div>
-
               <div>
                 <label style={formLabelStyle}>
                   Catatan{" "}
@@ -833,7 +961,7 @@ export default function BookingPage() {
                   </span>
                 </label>
                 <textarea
-                  placeholder="cth: Mau model undercut, sisi kiri lebih pendek..."
+                  placeholder="cth: Mau model undercut..."
                   value={form.note}
                   onChange={(e) => setForm({ ...form, note: e.target.value })}
                   rows={3}
@@ -846,8 +974,6 @@ export default function BookingPage() {
                 />
               </div>
             </div>
-
-            {/* Reminder info */}
             <div
               style={{
                 marginTop: "20px",
@@ -878,7 +1004,7 @@ export default function BookingPage() {
           </div>
         )}
 
-        {/* ── NAVIGATION BUTTONS ── */}
+        {/* Navigation */}
         <div
           style={{
             marginTop: "32px",
@@ -962,7 +1088,7 @@ export default function BookingPage() {
                     }}
                   >
                     ◌
-                  </span>
+                  </span>{" "}
                   Memproses...
                 </>
               ) : (
@@ -975,31 +1101,9 @@ export default function BookingPage() {
 
       <style>{`
         .date-scroll::-webkit-scrollbar { height: 4px; }
-        .date-scroll::-webkit-scrollbar-track { background: transparent; }
         .date-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
-
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to   { transform: rotate(360deg); }
-        }
-
-        @media (max-width: 600px) {
-          .book-topbar {
-            padding: 12px 16px !important;
-          }
-          .book-content {
-            padding: 24px 16px !important;
-          }
-          .book-topbar p:first-child {
-            font-size: 15px !important;
-          }
-        }
-
-        @media (max-width: 400px) {
-          .book-topbar > div:nth-child(3) span:not(:first-child) {
-            display: none;
-          }
-        }
+        @keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+        @media (max-width: 600px) { .book-topbar { padding: 12px 16px !important; } .book-content { padding: 24px 16px !important; } }
       `}</style>
     </div>
   );
@@ -1014,7 +1118,6 @@ const sectionLabelStyle: React.CSSProperties = {
   marginBottom: "12px",
   display: "block",
 };
-
 const formLabelStyle: React.CSSProperties = {
   display: "block",
   color: "var(--text-muted)",
@@ -1024,7 +1127,6 @@ const formLabelStyle: React.CSSProperties = {
   letterSpacing: "0.5px",
   marginBottom: "8px",
 };
-
 const formInputStyle: React.CSSProperties = {
   width: "100%",
   padding: "11px 14px",

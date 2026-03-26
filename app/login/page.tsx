@@ -3,13 +3,14 @@ import { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { loginAsAdmin, loginAsClient } from "@/lib/auth";
+import { Eye, EyeOff } from "lucide-react";
 
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const roleHint = searchParams.get("role");
   const isAdminLogin = roleHint === "admin";
-
+  const [showPass, setShowPass] = useState(false);
   const [form, setForm] = useState({ email: "", password: "" });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -221,14 +222,44 @@ function LoginForm() {
 
             <div>
               <label style={labelStyle}>Password</label>
-              <input
-                type="password"
-                placeholder="Password kamu"
-                value={form.password}
-                onChange={(e) => setForm({ ...form, password: e.target.value })}
-                style={inputStyle}
-                autoComplete="current-password"
-              />
+              <div style={{ position: "relative" }}>
+                <input
+                  type={showPass ? "text" : "password"}
+                  placeholder="Password kamu"
+                  value={form.password}
+                  onChange={(e) =>
+                    setForm({ ...form, password: e.target.value })
+                  }
+                  style={{ ...inputStyle, paddingRight: "44px" }}
+                  autoComplete="current-password"
+                  className="no-browser-eye"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPass(!showPass)}
+                  style={{
+                    position: "absolute",
+                    right: "12px",
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    background: "none",
+                    border: "none",
+                    color: "var(--text-dim)", // ← terang (bukan gelap)
+                    cursor: "pointer",
+                    padding: "2px",
+                    display: "flex",
+                    alignItems: "center",
+                    lineHeight: 1,
+                    fontSize: "16px",
+                  }}
+                >
+                  {showPass ? (
+                    <EyeOff size={16} color="var(--text-dim)" />
+                  ) : (
+                    <Eye size={16} color="var(--text-dim)" />
+                  )}
+                </button>
+              </div>
             </div>
 
             <button
@@ -325,6 +356,9 @@ function LoginForm() {
           from { transform: rotate(0deg); }
           to   { transform: rotate(360deg); }
         }
+          .no-browser-eye::-ms-reveal,
+  .no-browser-eye::-ms-clear { display: none !important; }
+  @keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
       `}</style>
     </div>
   );

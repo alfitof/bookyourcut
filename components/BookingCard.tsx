@@ -6,9 +6,12 @@ interface BookingCardProps {
   date: string;
   time: string;
   phone: string;
-  status: "confirmed" | "pending" | "cancelled" | "completed";
+  status: "confirmed" | "pending" | "completed" | "cancelled";
   duration?: string;
   price?: string;
+  onStatusChange?: (
+    status: "confirmed" | "pending" | "completed" | "cancelled",
+  ) => void;
 }
 
 const statusMap = {
@@ -27,6 +30,7 @@ export default function BookingCard({
   status,
   duration,
   price,
+  onStatusChange,
 }: BookingCardProps) {
   const s = statusMap[status];
   const initials = customerName
@@ -35,6 +39,16 @@ export default function BookingCard({
     .join("")
     .slice(0, 2)
     .toUpperCase();
+  const [open, setOpen] = require("react").useState(false);
+
+  const nextStatuses = {
+    pending: ["confirmed", "cancelled"],
+    confirmed: ["completed", "cancelled"],
+    completed: [],
+    cancelled: [],
+  } as Record<string, string[]>;
+
+  const available = nextStatuses[status];
 
   return (
     <div
@@ -47,9 +61,10 @@ export default function BookingCard({
         alignItems: "center",
         gap: "16px",
         transition: "border-color 0.15s",
+        position: "relative",
       }}
     >
-      {/* avatar */}
+      {/* Avatar */}
       <div
         style={{
           width: "42px",
@@ -69,7 +84,7 @@ export default function BookingCard({
         {initials}
       </div>
 
-      {/* info */}
+      {/* Info */}
       <div style={{ flex: 1, minWidth: 0 }}>
         <div
           style={{
@@ -95,7 +110,7 @@ export default function BookingCard({
         </p>
       </div>
 
-      {/* time */}
+      {/* Time */}
       <div style={{ textAlign: "right", flexShrink: 0 }}>
         <p
           style={{
@@ -120,6 +135,7 @@ export default function BookingCard({
         )}
       </div>
 
+      {/* Price */}
       {price && (
         <div
           style={{
@@ -129,11 +145,82 @@ export default function BookingCard({
             fontFamily: "Cabinet Grotesk, sans-serif",
             fontWeight: 700,
             fontSize: "14px",
-            color: "var(--accent)",
+            color: status === "completed" ? "#22c55e" : "var(--accent)",
             flexShrink: 0,
           }}
         >
           {price}
+        </div>
+      )}
+
+      {/* Status change button */}
+      {available.length > 0 && onStatusChange && (
+        <div style={{ position: "relative", flexShrink: 0 }}>
+          <button
+            onClick={() => setOpen(!open)}
+            style={{
+              padding: "6px 10px",
+              borderRadius: "var(--r-sm)",
+              background: "var(--surface-3)",
+              border: "1px solid var(--border)",
+              color: "var(--text-dim)",
+              fontSize: "12px",
+              cursor: "pointer",
+              fontFamily: "inherit",
+            }}
+          >
+            ⋯
+          </button>
+          {open && (
+            <div
+              style={{
+                position: "absolute",
+                right: 0,
+                top: "calc(100% + 6px)",
+                background: "var(--surface)",
+                border: "1px solid var(--border)",
+                borderRadius: "var(--r-sm)",
+                boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
+                zIndex: 50,
+                minWidth: "160px",
+                overflow: "hidden",
+              }}
+            >
+              {available.map((ns) => (
+                <button
+                  key={ns}
+                  onClick={() => {
+                    onStatusChange(ns as any);
+                    setOpen(false);
+                  }}
+                  style={{
+                    display: "block",
+                    width: "100%",
+                    padding: "10px 14px",
+                    background: "none",
+                    border: "none",
+                    textAlign: "left",
+                    color:
+                      ns === "completed"
+                        ? "#22c55e"
+                        : ns === "cancelled"
+                          ? "var(--red)"
+                          : "var(--text)",
+                    fontSize: "13px",
+                    fontWeight: 500,
+                    cursor: "pointer",
+                    fontFamily: "inherit",
+                  }}
+                >
+                  {ns === "completed"
+                    ? "✓ Tandai Selesai"
+                    : ns === "confirmed"
+                      ? "✓ Konfirmasi"
+                      : "✕ Batalkan"}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

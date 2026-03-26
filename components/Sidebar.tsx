@@ -13,6 +13,8 @@ import {
   LogOut,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
+import { useEffect, useState } from "react";
+import { getClientProfile } from "@/lib/firestore";
 
 const navItems = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
@@ -38,6 +40,14 @@ export default function Sidebar({
 }: SidebarProps) {
   const pathname = usePathname();
   const { user } = useAuth();
+  const [slug, setSlug] = useState("alfito-barber");
+
+  useEffect(() => {
+    if (!user) return;
+    getClientProfile(user.uid).then((profile) => {
+      if (profile?.slug) setSlug(profile.slug);
+    });
+  }, [user]);
 
   return (
     <>
@@ -210,7 +220,7 @@ export default function Sidebar({
           }}
         >
           <Link
-            href="/book/alfito-barber"
+            href={`/book/${slug}`}
             target="_blank"
             style={{
               display: "flex",

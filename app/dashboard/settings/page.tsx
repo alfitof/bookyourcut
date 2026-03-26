@@ -1,13 +1,8 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useAuth } from "@/context/AuthContext";
+import { getClientProfile, updateClientProfile } from "@/lib/firestore";
 import Toggle from "@/components/Toggle";
-
-const integrations = [
-  { name: "WhatsApp (Fonnte)", status: "connected", icon: "💬" },
-  { name: "n8n Automation", status: "connected", icon: "⚡" },
-  { name: "Email (Resend)", status: "disconnected", icon: "📧" },
-  { name: "Midtrans Payment", status: "disconnected", icon: "💳" },
-];
 
 const notificationItems = [
   { label: "Booking baru masuk", key: "new_booking" },
@@ -16,24 +11,82 @@ const notificationItems = [
   { label: "Laporan mingguan", key: "weekly_report" },
 ];
 
+const integrations = [
+  { name: "WhatsApp (Fonnte)", status: "connected", icon: "💬" },
+  { name: "n8n Automation", status: "connected", icon: "⚡" },
+  { name: "Email (Resend)", status: "disconnected", icon: "📧" },
+  { name: "Midtrans Payment", status: "disconnected", icon: "💳" },
+];
+
 type DeleteStep = "idle" | "confirm" | "typing" | "deleting" | "done";
 
 export default function SettingsPage() {
+  const { user } = useAuth();
+
+  const [profile, setProfile] = useState({
+    businessName: "",
+    email: "",
+    phone: "",
+    slug: "",
+    address: "",
+  });
+  const [loadingProfile, setLoadingProfile] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [profileError, setProfileError] = useState("");
+
   const [notifications, setNotifications] = useState<Record<string, boolean>>({
     new_booking: true,
     reminder_sent: true,
     booking_cancelled: true,
     weekly_report: false,
   });
-  const [saved, setSaved] = useState(false);
+
   const [deleteStep, setDeleteStep] = useState<DeleteStep>("idle");
   const [deleteInput, setDeleteInput] = useState("");
-
   const DELETE_KEYWORD = "HAPUS SEMUA";
 
-  function handleSave() {
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+  // ── Fetch profile ──
+  useEffect(() => {
+    if (!user) return;
+    getClientProfile(user.uid).then((data) => {
+      if (data) {
+        setProfile({
+          businessName: data.businessName ?? "",
+          email: data.email ?? user.email ?? "",
+          phone: data.phone ?? "",
+          slug: data.slug ?? "",
+          address: data.address ?? "",
+        });
+      } else {
+        setProfile((prev) => ({ ...prev, email: user.email ?? "" }));
+      }
+      setLoadingProfile(false);
+    });
+  }, [user]);
+
+  async function handleSaveProfile() {
+    if (!user) return;
+    if (!profile.businessName.trim()) {
+      setProfileError("Nama bisnis wajib diisi.");
+      return;
+    }
+    setProfileError("");
+    setSaving(true);
+    try {
+      await updateClientProfile(user.uid, {
+        businessName: profile.businessName,
+        phone: profile.phone,
+        slug: profile.slug,
+        address: profile.address,
+      });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (err) {
+      setProfileError("Gagal menyimpan. Coba lagi.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   function handleDeleteStart() {
@@ -49,10 +102,10 @@ export default function SettingsPage() {
   function handleDeleteConfirm() {
     if (deleteInput !== DELETE_KEYWORD) return;
     setDeleteStep("deleting");
-    setTimeout(() => {
-      setDeleteStep("done");
-    }, 1800);
+    setTimeout(() => setDeleteStep("done"), 1800);
   }
+
+  const bookingUrl = `${typeof window !== "undefined" ? window.location.origin : "https://bookyourcut.app"}/book/${profile.slug}`;
 
   return (
     <div style={{ padding: "36px 40px" }} className="settings-page">
@@ -70,7 +123,7 @@ export default function SettingsPage() {
           Settings
         </h1>
         <p style={{ color: "var(--text-dim)", fontSize: "14px" }}>
-          Kelola profil bisnis kamu.
+          Kelola profil dan konfigurasi bisnis kamu.
         </p>
       </div>
 
@@ -83,96 +136,229 @@ export default function SettingsPage() {
           alignItems: "start",
         }}
       >
-        {/* ── KOLOM KIRI — Profil Bisnis ── */}
+        {/* ── KOLOM KIRI — Profil ── */}
         <div style={cardStyle}>
           <h3 style={cardTitleStyle}>Profil Bisnis</h3>
-          <div
-            style={{ display: "flex", flexDirection: "column", gap: "14px" }}
-          >
-            <div>
-              <label style={labelStyle}>Nama Bisnis</label>
-              <input defaultValue="Alfito Barber Studio" style={inputStyle} />
-            </div>
-            <div>
-              <label style={labelStyle}>Slug / URL</label>
+
+          {loadingProfile ? (
+            <div style={{ padding: "40px", textAlign: "center" }}>
               <div
                 style={{
-                  display: "flex",
-                  border: "1px solid var(--border)",
-                  borderRadius: "var(--r-sm)",
-                  overflow: "hidden",
+                  width: "24px",
+                  height: "24px",
+                  borderRadius: "50%",
+                  border: "3px solid var(--border)",
+                  borderTop: "3px solid var(--accent)",
+                  margin: "0 auto",
+                  animation: "spin 0.8s linear infinite",
                 }}
-              >
-                <span
+              />
+            </div>
+          ) : (
+            <div
+              style={{ display: "flex", flexDirection: "column", gap: "14px" }}
+            >
+              {profileError && (
+                <div
                   style={{
-                    padding: "10px 12px",
-                    background: "var(--surface-3)",
-                    color: "var(--text-muted)",
+                    padding: "10px 14px",
+                    borderRadius: "var(--r-sm)",
+                    background: "rgba(244,63,94,0.08)",
+                    border: "1px solid rgba(244,63,94,0.2)",
+                    color: "var(--red)",
                     fontSize: "13px",
-                    borderRight: "1px solid var(--border)",
-                    whiteSpace: "nowrap",
                   }}
                 >
-                  bookyourcut.app/book/
-                </span>
+                  {profileError}
+                </div>
+              )}
+
+              {/* Nama Bisnis */}
+              <div>
+                <label style={labelStyle}>Nama Bisnis</label>
                 <input
-                  defaultValue="alfito-barber"
+                  type="text"
+                  value={profile.businessName}
+                  onChange={(e) =>
+                    setProfile({ ...profile, businessName: e.target.value })
+                  }
+                  placeholder="cth: Alfito Barber"
+                  style={inputStyle}
+                />
+              </div>
+
+              {/* Slug */}
+              <div>
+                <label style={labelStyle}>Slug / URL</label>
+                <div
                   style={{
-                    flex: 1,
-                    padding: "10px 12px",
-                    background: "var(--surface-2)",
-                    border: "none",
-                    color: "var(--text)",
-                    fontSize: "14px",
-                    outline: "none",
+                    display: "flex",
+                    border: "1px solid var(--border)",
+                    borderRadius: "var(--r-sm)",
+                    overflow: "hidden",
+                  }}
+                >
+                  <span
+                    style={{
+                      padding: "10px 12px",
+                      background: "var(--surface-3)",
+                      color: "var(--text-muted)",
+                      fontSize: "12px",
+                      borderRight: "1px solid var(--border)",
+                      whiteSpace: "nowrap",
+                      display: "flex",
+                      alignItems: "center",
+                    }}
+                  >
+                    bookyourcut.app/book/
+                  </span>
+                  <input
+                    type="text"
+                    value={profile.slug}
+                    onChange={(e) =>
+                      setProfile({
+                        ...profile,
+                        slug: e.target.value
+                          .toLowerCase()
+                          .replace(/\s+/g, "-")
+                          .replace(/[^a-z0-9-]/g, ""),
+                      })
+                    }
+                    style={{
+                      flex: 1,
+                      padding: "10px 12px",
+                      background: "var(--surface-2)",
+                      border: "none",
+                      color: "var(--accent)",
+                      fontSize: "14px",
+                      fontWeight: 600,
+                      outline: "none",
+                      fontFamily: "monospace",
+                      minWidth: 0,
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Email — readonly */}
+              <div>
+                <label style={labelStyle}>Email (tidak bisa diubah)</label>
+                <input
+                  type="email"
+                  value={profile.email}
+                  readOnly
+                  style={{ ...inputStyle, opacity: 0.6, cursor: "not-allowed" }}
+                />
+              </div>
+
+              {/* WhatsApp */}
+              <div>
+                <label style={labelStyle}>Nomor WhatsApp</label>
+                <input
+                  type="tel"
+                  value={profile.phone}
+                  onChange={(e) =>
+                    setProfile({ ...profile, phone: e.target.value })
+                  }
+                  placeholder="cth: 08123456789"
+                  style={inputStyle}
+                />
+              </div>
+
+              {/* Alamat */}
+              <div>
+                <label style={labelStyle}>Alamat</label>
+                <textarea
+                  rows={3}
+                  value={profile.address}
+                  onChange={(e) =>
+                    setProfile({ ...profile, address: e.target.value })
+                  }
+                  placeholder="cth: Jl. Sudirman No. 12, Jakarta"
+                  style={{
+                    ...inputStyle,
+                    resize: "none",
+                    lineHeight: 1.5,
                     fontFamily: "inherit",
                   }}
                 />
               </div>
-            </div>
-            <div>
-              <label style={labelStyle}>Nomor WhatsApp</label>
-              <input defaultValue="6281234567890" style={inputStyle} />
-            </div>
-            <div>
-              <label style={labelStyle}>Email</label>
-              <input
-                type="email"
-                defaultValue="alfito@barber.com"
-                style={inputStyle}
-              />
-            </div>
-            <div>
-              <label style={labelStyle}>Alamat</label>
-              <textarea
-                rows={3}
-                defaultValue="Jl. Sudirman No. 12, Jakarta Pusat"
+
+              {/* Booking link preview */}
+              {profile.slug && (
+                <div
+                  style={{
+                    padding: "12px 14px",
+                    borderRadius: "var(--r-sm)",
+                    background: "var(--accent-muted)",
+                    border: "1px solid var(--accent-border)",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    gap: "10px",
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <p
+                    style={{
+                      fontFamily: "monospace",
+                      fontSize: "12px",
+                      color: "var(--accent)",
+                      flex: 1,
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {bookingUrl}
+                  </p>
+                  <button
+                    onClick={() => navigator.clipboard.writeText(bookingUrl)}
+                    style={{
+                      padding: "4px 12px",
+                      borderRadius: "5px",
+                      background: "var(--surface)",
+                      border: "1px solid var(--border)",
+                      color: "var(--text-dim)",
+                      fontSize: "12px",
+                      cursor: "pointer",
+                      fontFamily: "inherit",
+                      flexShrink: 0,
+                    }}
+                  >
+                    Copy
+                  </button>
+                </div>
+              )}
+
+              <button
+                onClick={handleSaveProfile}
+                disabled={saving}
                 style={{
-                  ...inputStyle,
-                  resize: "none",
-                  lineHeight: 1.5,
-                  fontFamily: "inherit",
+                  padding: "10px 20px",
+                  borderRadius: "var(--r-sm)",
+                  background: saving
+                    ? "var(--surface-3)"
+                    : saved
+                      ? "#22c55e"
+                      : "var(--accent)",
+                  color: saving ? "var(--text-muted)" : "#08090c",
+                  fontSize: "13px",
+                  fontWeight: 700,
+                  cursor: saving ? "not-allowed" : "pointer",
+                  border: "none",
+                  transition: "background 0.2s",
+                  alignSelf: "flex-start",
                 }}
-              />
+              >
+                {saving
+                  ? "Menyimpan..."
+                  : saved
+                    ? "✓ Tersimpan!"
+                    : "Simpan Profil"}
+              </button>
             </div>
-            <button
-              onClick={handleSave}
-              style={{
-                padding: "10px 20px",
-                borderRadius: "var(--r-sm)",
-                background: saved ? "#22c55e" : "var(--accent)",
-                color: "#08090c",
-                fontSize: "13px",
-                fontWeight: 700,
-                cursor: "pointer",
-                border: "none",
-                transition: "background 0.2s",
-                alignSelf: "flex-start",
-              }}
-            >
-              {saved ? "✓ Tersimpan!" : "Simpan Profil"}
-            </button>
-          </div>
+          )}
         </div>
 
         {/* ── KOLOM KANAN ── */}
@@ -318,11 +504,10 @@ export default function SettingsPage() {
             >
               Tindakan ini tidak bisa dibatalkan. Lanjutkan dengan hati-hati.
             </p>
-
             {deleteStep === "done" ? (
               <div
                 style={{
-                  padding: "14px 16px",
+                  padding: "12px 14px",
                   borderRadius: "var(--r-sm)",
                   background: "rgba(34,197,94,0.08)",
                   border: "1px solid rgba(34,197,94,0.2)",
@@ -354,7 +539,7 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      {/* ── MODAL DELETE CONFIRMATION ── */}
+      {/* Modal Delete */}
       {(deleteStep === "confirm" ||
         deleteStep === "typing" ||
         deleteStep === "deleting") && (
@@ -386,7 +571,6 @@ export default function SettingsPage() {
             }}
           >
             {deleteStep === "deleting" ? (
-              /* Loading state */
               <div style={{ textAlign: "center", padding: "20px 0" }}>
                 <div
                   style={{
@@ -415,7 +599,6 @@ export default function SettingsPage() {
               </div>
             ) : (
               <>
-                {/* Icon */}
                 <div
                   style={{
                     width: "52px",
@@ -432,7 +615,6 @@ export default function SettingsPage() {
                 >
                   ⚠️
                 </div>
-
                 <h2
                   style={{
                     fontFamily: "Cabinet Grotesk, sans-serif",
@@ -455,11 +637,8 @@ export default function SettingsPage() {
                   <strong style={{ color: "var(--red)" }}>
                     menghapus permanen
                   </strong>{" "}
-                  seluruh data booking, riwayat, dan reminder. Data tidak dapat
-                  dipulihkan.
+                  seluruh data booking dan riwayat. Data tidak dapat dipulihkan.
                 </p>
-
-                {/* Confirmation input */}
                 <div style={{ marginBottom: "20px" }}>
                   <label
                     style={{
@@ -503,11 +682,11 @@ export default function SettingsPage() {
                       outline: "none",
                       fontFamily: "monospace",
                       transition: "border-color 0.2s",
+                      boxSizing: "border-box",
                     }}
                     autoFocus
                   />
                 </div>
-
                 <div style={{ display: "flex", gap: "10px" }}>
                   <button
                     onClick={handleDeleteCancel}
@@ -521,6 +700,7 @@ export default function SettingsPage() {
                       fontSize: "14px",
                       fontWeight: 500,
                       cursor: "pointer",
+                      fontFamily: "inherit",
                     }}
                   >
                     Batal
@@ -548,6 +728,7 @@ export default function SettingsPage() {
                           ? "pointer"
                           : "not-allowed",
                       transition: "all 0.2s",
+                      fontFamily: "inherit",
                     }}
                   >
                     Ya, Hapus Semua
@@ -560,16 +741,9 @@ export default function SettingsPage() {
       )}
 
       <style>{`
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to   { transform: rotate(360deg); }
-        }
-        @media (max-width: 900px) {
-          .settings-grid { grid-template-columns: 1fr !important; }
-        }
-        @media (max-width: 768px) {
-          .settings-page { padding: 20px 16px !important; }
-        }
+        @keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+        @media (max-width: 900px) { .settings-grid { grid-template-columns: 1fr !important; } }
+        @media (max-width: 768px) { .settings-page { padding: 20px 16px !important; } }
       `}</style>
     </div>
   );
@@ -581,14 +755,12 @@ const cardStyle: React.CSSProperties = {
   background: "var(--surface)",
   border: "1px solid var(--border)",
 };
-
 const cardTitleStyle: React.CSSProperties = {
   fontFamily: "Cabinet Grotesk, sans-serif",
   fontWeight: 800,
   fontSize: "16px",
   marginBottom: "20px",
 };
-
 const labelStyle: React.CSSProperties = {
   display: "block",
   color: "var(--text-muted)",
@@ -598,7 +770,6 @@ const labelStyle: React.CSSProperties = {
   letterSpacing: "0.5px",
   marginBottom: "8px",
 };
-
 const inputStyle: React.CSSProperties = {
   width: "100%",
   padding: "10px 14px",
@@ -609,4 +780,5 @@ const inputStyle: React.CSSProperties = {
   fontSize: "14px",
   outline: "none",
   fontFamily: "inherit",
+  boxSizing: "border-box",
 };
