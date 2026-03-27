@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { CheckCircle } from "lucide-react";
 
 export default async function SuccessPage({
   params,
@@ -27,22 +28,21 @@ export default async function SuccessPage({
         className="anim-scale-in"
         style={{ width: "100%", maxWidth: "460px", textAlign: "center" }}
       >
-        {/* Check icon */}
+        {/* ── Check icon ── */}
         <div
           style={{
-            width: "80px",
-            height: "80px",
+            width: "88px",
+            height: "88px",
             borderRadius: "50%",
             background: "rgba(34,197,94,0.1)",
-            border: "2px solid rgba(34,197,94,0.3)",
+            border: "2px solid rgba(34,197,94,0.25)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            fontSize: "36px",
-            margin: "0 auto 24px",
+            margin: "0 auto 28px",
           }}
         >
-          ✓
+          <CheckCircle size={48} color="#22c55e" strokeWidth={1.8} />
         </div>
 
         <h1
@@ -95,19 +95,15 @@ export default async function SuccessPage({
             Detail Booking
           </p>
           {[
-            { label: "Layanan", value: "Haircut" },
-            { label: "Tanggal", value: "Rabu, 22 Juni 2025" },
-            { label: "Jam", value: "10:00 WIB" },
-            { label: "Durasi", value: "30 menit" },
-            { label: "Harga", value: "Rp 50.000" },
-            { label: "Status", value: "✅ Confirmed" },
+            { label: "Status", value: "✅ Menunggu Konfirmasi" },
+            { label: "Reminder", value: "📱 Via WhatsApp" },
           ].map((row) => (
             <div
               key={row.label}
               style={{
                 display: "flex",
                 justifyContent: "space-between",
-                padding: "8px 0",
+                padding: "9px 0",
                 borderBottom: "1px solid var(--border)",
                 fontSize: "14px",
               }}

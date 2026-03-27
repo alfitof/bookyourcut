@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { getClientProfile, updateClientProfile } from "@/lib/firestore";
 import Toggle from "@/components/Toggle";
+import { getBookings, deleteBooking } from "@/lib/firestore";
 
 const notificationItems = [
   { label: "Booking baru masuk", key: "new_booking" },
@@ -99,10 +100,18 @@ export default function SettingsPage() {
     setDeleteInput("");
   }
 
-  function handleDeleteConfirm() {
-    if (deleteInput !== DELETE_KEYWORD) return;
+  async function handleDeleteConfirm() {
+    if (deleteInput !== DELETE_KEYWORD || !user) return;
     setDeleteStep("deleting");
-    setTimeout(() => setDeleteStep("done"), 1800);
+    try {
+      const bookings = await getBookings(user.uid);
+      await Promise.all(bookings.map((b) => deleteBooking(user.uid, b.id)));
+      setDeleteStep("done");
+    } catch (err) {
+      console.error("Error deleting bookings:", err);
+      setDeleteStep("idle");
+      setDeleteInput("");
+    }
   }
 
   const bookingUrl = `${typeof window !== "undefined" ? window.location.origin : "https://bookyourcut.app"}/book/${profile.slug}`;
@@ -516,7 +525,7 @@ export default function SettingsPage() {
                   fontWeight: 500,
                 }}
               >
-                ✓ Semua data booking telah dihapus. (simulasi)
+                ✓ Semua data booking telah dihapus.
               </div>
             ) : (
               <button

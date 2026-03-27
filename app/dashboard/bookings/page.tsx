@@ -1,19 +1,17 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import BookingCard from "@/components/BookingCard";
 import { useAuth } from "@/context/AuthContext";
 import {
   getBookings,
   addBooking,
   updateBookingStatus,
-  deleteBooking,
   type Booking,
   getServices,
   type Service,
 } from "@/lib/firestore";
-import { useSearchParams } from "next/navigation";
 
-const SERVICES = ["Haircut", "Haircut + Beard", "Coloring", "Keramas"];
 const SLOTS = [
   "09:00",
   "09:30",
@@ -31,13 +29,6 @@ const SLOTS = [
   "16:30",
 ];
 
-const SERVICE_INFO: Record<string, { duration: string; price: string }> = {
-  Haircut: { duration: "30 mnt", price: "Rp 50rb" },
-  "Haircut + Beard": { duration: "45 mnt", price: "Rp 75rb" },
-  Coloring: { duration: "90 mnt", price: "Rp 150rb" },
-  Keramas: { duration: "15 mnt", price: "Rp 25rb" },
-};
-
 const filters = ["Semua", "confirmed", "pending", "completed", "cancelled"];
 const filterLabels: Record<string, string> = {
   Semua: "Semua",
@@ -47,69 +38,55 @@ const filterLabels: Record<string, string> = {
   cancelled: "Cancelled",
 };
 
-export default function BookingsPage() {
+// ── Inner component (pakai useSearchParams) ──
+function BookingsContent() {
+  const { user } = useAuth();
   const searchParams = useSearchParams();
   const filterFromUrl = searchParams.get("filter");
-  const { user } = useAuth();
+
   const [bookings, setBookings] = useState<Booking[]>([]);
+  const [services, setServices] = useState<Service[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState(filterFromUrl ?? "Semua");
   const [search, setSearch] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [services, setServices] = useState<Service[]>([]);
+  const [formError, setFormError] = useState("");
   const [form, setForm] = useState({
     name: "",
     phone: "",
-    service: SERVICES[0],
+    service: "",
     date: "",
     time: SLOTS[0],
   });
-  const [formError, setFormError] = useState("");
 
   useEffect(() => {
     if (!user) return;
-    fetchBookings();
-    fetchServices();
+    fetchAll();
   }, [user]);
 
-  async function fetchServices() {
-    if (!user) return;
-    try {
-      const data = await getServices(user.uid);
-      setServices(data);
-    } catch (err) {
-      console.error("Error fetching services:", err);
-    }
-  }
-
-  function getServiceInfo(serviceName: string) {
-    const found = services.find((s) => s.name === serviceName);
-    return found
-      ? { duration: found.duration, price: found.price }
-      : { duration: "—", price: "—" };
-  }
-
-  async function fetchBookings() {
+  async function fetchAll() {
     if (!user) return;
     setLoading(true);
     try {
-      const data = await getBookings(user.uid);
-      setBookings(data);
+      const [bkgs, svcs] = await Promise.all([
+        getBookings(user.uid),
+        getServices(user.uid),
+      ]);
+      setBookings(bkgs);
+      setServices(svcs);
+      if (svcs.length > 0 && !form.service) {
+        setForm((f) => ({ ...f, service: svcs[0].name }));
+      }
     } finally {
       setLoading(false);
     }
   }
 
-  async function handleStatusChange(
-    bookingId: string,
-    status: Booking["status"],
-  ) {
+  async function fetchBookings() {
     if (!user) return;
-    await updateBookingStatus(user.uid, bookingId, status);
-    setBookings((prev) =>
-      prev.map((b) => (b.id === bookingId ? { ...b, status } : b)),
-    );
+    const bkgs = await getBookings(user.uid);
+    setBookings(bkgs);
   }
 
   const filtered = bookings.filter((b) => {
@@ -142,6 +119,13 @@ export default function BookingsPage() {
     })(),
   };
 
+  function getServiceInfo(name: string) {
+    const found = services.find((s) => s.name === name);
+    return found
+      ? { duration: found.duration, price: found.price }
+      : { duration: "—", price: "—" };
+  }
+
   async function handleAddBooking() {
     if (!user) return;
     if (!form.name.trim() || !form.phone.trim() || !form.date) {
@@ -172,16 +156,27 @@ export default function BookingsPage() {
       setForm({
         name: "",
         phone: "",
-        service: SERVICES[0],
+        service: services[0]?.name ?? "",
         date: "",
         time: SLOTS[0],
       });
       setShowModal(false);
-    } catch (err) {
+    } catch {
       setFormError("Gagal menambahkan booking.");
     } finally {
       setSubmitting(false);
     }
+  }
+
+  async function handleStatusChange(
+    bookingId: string,
+    status: Booking["status"],
+  ) {
+    if (!user) return;
+    await updateBookingStatus(user.uid, bookingId, status);
+    setBookings((prev) =>
+      prev.map((b) => (b.id === bookingId ? { ...b, status } : b)),
+    );
   }
 
   function handleCloseModal() {
@@ -190,7 +185,7 @@ export default function BookingsPage() {
     setForm({
       name: "",
       phone: "",
-      service: SERVICES[0],
+      service: services[0]?.name ?? "",
       date: "",
       time: SLOTS[0],
     });
@@ -396,7 +391,7 @@ export default function BookingsPage() {
         )}
       </div>
 
-      {/* Modal */}
+      {/* Modal Booking Manual */}
       {showModal && (
         <div
           style={{
@@ -456,6 +451,7 @@ export default function BookingsPage() {
                 ✕
               </button>
             </div>
+
             {formError && (
               <div
                 style={{
@@ -471,6 +467,7 @@ export default function BookingsPage() {
                 {formError}
               </div>
             )}
+
             <div
               style={{ display: "flex", flexDirection: "column", gap: "14px" }}
             >
@@ -504,9 +501,15 @@ export default function BookingsPage() {
                   }
                   style={mInput}
                 >
-                  {SERVICES.map((s) => (
-                    <option key={s}>{s}</option>
-                  ))}
+                  {services.length === 0 ? (
+                    <option value="">Belum ada layanan</option>
+                  ) : (
+                    services.map((s) => (
+                      <option key={s.id} value={s.name}>
+                        {s.name} · {s.price} ({s.duration})
+                      </option>
+                    ))
+                  )}
                 </select>
               </div>
               <div
@@ -540,6 +543,7 @@ export default function BookingsPage() {
                 </div>
               </div>
             </div>
+
             <div style={{ display: "flex", gap: "10px", marginTop: "24px" }}>
               <button
                 onClick={handleCloseModal}
@@ -604,6 +608,76 @@ export default function BookingsPage() {
         @media (max-width: 480px) { .bookings-page { padding: 16px 12px; } .booking-stats { grid-template-columns: repeat(2,1fr); gap: 8px; } .booking-stat-card { padding: 12px 14px; } .booking-stat-label { font-size: 10px; } .booking-stat-value { font-size: 18px; } }
       `}</style>
     </div>
+  );
+}
+
+// ── Loading fallback ──
+function BookingsLoading() {
+  return (
+    <div style={{ padding: "36px 40px" }}>
+      <div style={{ marginBottom: "24px" }}>
+        <div
+          style={{
+            height: "32px",
+            width: "200px",
+            borderRadius: "var(--r-sm)",
+            background: "var(--surface-3)",
+            marginBottom: "8px",
+          }}
+        />
+        <div
+          style={{
+            height: "16px",
+            width: "120px",
+            borderRadius: "var(--r-sm)",
+            background: "var(--surface-3)",
+          }}
+        />
+      </div>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(4,1fr)",
+          gap: "12px",
+          marginBottom: "20px",
+        }}
+      >
+        {[1, 2, 3, 4].map((i) => (
+          <div
+            key={i}
+            style={{
+              height: "80px",
+              borderRadius: "var(--r)",
+              background: "var(--surface)",
+              border: "1px solid var(--border)",
+            }}
+          />
+        ))}
+      </div>
+      <div style={{ padding: "60px", textAlign: "center" }}>
+        <div
+          style={{
+            width: "28px",
+            height: "28px",
+            borderRadius: "50%",
+            border: "3px solid var(--border)",
+            borderTop: "3px solid var(--accent)",
+            margin: "0 auto",
+            animation: "spin 0.8s linear infinite",
+          }}
+        />
+      </div>
+      <style>{`@keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }`}</style>
+    </div>
+  );
+}
+
+// ── Default export dengan Suspense wrapper ──
+export default function BookingsPage() {
+  return (
+    <Suspense fallback={<BookingsLoading />}>
+      <BookingsContent />
+    </Suspense>
   );
 }
 
