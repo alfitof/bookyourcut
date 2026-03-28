@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 
 test("halaman login BookYourCut loads correctly", async ({ page }) => {
-  await page.goto("http://localhost:3000/login");
+  await page.goto("/login");
 
   await expect(page).toHaveTitle("BookYourCut — Booking & Reminder Otomatis");
 
