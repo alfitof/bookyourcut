@@ -7,14 +7,16 @@ import {
 import { adminDb } from "@/lib/firebase-admin-server";
 import { FieldValue } from "firebase-admin/firestore";
 
-// Ambil profile client via Admin SDK
 async function getClientProfileAdmin(uid: string) {
-  const snap = await adminDb.collection("clients").doc(uid).get();
-  if (!snap.exists) return null;
-  return snap.data() as { businessName?: string; slug?: string };
+  try {
+    const snap = await adminDb.collection("clients").doc(uid).get();
+    if (!snap.exists) return null;
+    return snap.data() as { businessName?: string };
+  } catch {
+    return null;
+  }
 }
 
-// Simpan reminder log via Admin SDK
 async function addReminderLogAdmin(
   uid: string,
   data: {
@@ -24,22 +26,23 @@ async function addReminderLogAdmin(
     via: string;
     scheduledAt: string;
     status: "scheduled" | "sent" | "failed";
+    error?: string;
   },
 ) {
-  await adminDb
-    .collection("clients")
-    .doc(uid)
-    .collection("reminderLogs")
-    .add({
-      ...data,
-      createdAt: FieldValue.serverTimestamp(),
-    });
+  try {
+    await adminDb
+      .collection("clients")
+      .doc(uid)
+      .collection("reminderLogs")
+      .add({ ...data, createdAt: FieldValue.serverTimestamp() });
+  } catch (err) {
+    console.error("Failed to save reminder log:", err);
+  }
 }
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-
     console.log("=== Trigger Reminder ===");
     console.log("Body:", JSON.stringify(body, null, 2));
 
@@ -53,41 +56,50 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // ── Ambil data client via Admin SDK (no permission issue) ──
     const profile = await getClientProfileAdmin(clientUid);
     const clientName = profile?.businessName ?? "Barber Shop";
     const chatId = process.env.TELEGRAM_CHAT_ID ?? "";
 
+    // ── Cek apakah n8n URL tersedia ──
+    const n8nUrl =
+      process.env.N8N_WEBHOOK_URL ?? process.env.NEXT_PUBLIC_N8N_WEBHOOK_URL;
+
+    if (!n8nUrl) {
+      console.warn(
+        "N8N_WEBHOOK_URL not configured — skipping reminder trigger",
+      );
+      return NextResponse.json({
+        success: true,
+        message: "Booking saved. Reminder skipped (n8n not configured).",
+        results: [],
+      });
+    }
+
     const { h1Day, h1Hour } = calculateWaitTimes(date, time);
     const now = new Date();
 
-    console.log("Booking time info:", {
-      h1Day,
-      h1Hour,
-      now: now.toISOString(),
-    });
+    console.log("Times:", { h1Day, h1Hour, now: now.toISOString() });
 
     const results = [];
 
-    // ── Trigger H-1 Hari ──
-    const payloadH1Day: ReminderPayload = {
-      bookingId,
-      customerName,
-      service,
-      date,
-      time,
-      phone,
-      clientName,
-      chatId,
-      reminderType: "h1_day",
-      waitUntil: h1Day,
-    };
-
+    // ── H-1 Hari ──
     if (new Date(h1Day) > now) {
-      const r1 = await triggerReminder(payloadH1Day);
-      console.log("H-1 Day result:", r1);
+      const payload: ReminderPayload = {
+        bookingId,
+        customerName,
+        service,
+        date,
+        time,
+        phone,
+        clientName,
+        chatId,
+        reminderType: "h1_day",
+        waitUntil: h1Day,
+      };
 
-      // Log ke Firestore via Admin SDK
+      const r1 = await triggerReminder(payload);
+      console.log("H-1 Day:", r1);
+
       await addReminderLogAdmin(clientUid, {
         bookingId,
         customerName,
@@ -95,31 +107,32 @@ export async function POST(req: NextRequest) {
         via: "telegram",
         scheduledAt: h1Day,
         status: r1.success ? "scheduled" : "failed",
+        error: r1.success ? undefined : String(r1.error ?? ""),
       });
 
       results.push({ type: "h1_day", ...r1 });
     } else {
-      console.log("H-1 Day skipped — already passed:", h1Day);
-      results.push({ type: "h1_day", skipped: true });
+      console.log("H-1 Day skipped — already passed");
+      results.push({ type: "h1_day", skipped: true, reason: "time_passed" });
     }
 
-    // ── Trigger H-1 Jam ──
-    const payloadH1Hour: ReminderPayload = {
-      bookingId,
-      customerName,
-      service,
-      date,
-      time,
-      phone,
-      clientName,
-      chatId,
-      reminderType: "h1_hour",
-      waitUntil: h1Hour,
-    };
-
+    // ── H-1 Jam ──
     if (new Date(h1Hour) > now) {
-      const r2 = await triggerReminder(payloadH1Hour);
-      console.log("H-1 Hour result:", r2);
+      const payload: ReminderPayload = {
+        bookingId,
+        customerName,
+        service,
+        date,
+        time,
+        phone,
+        clientName,
+        chatId,
+        reminderType: "h1_hour",
+        waitUntil: h1Hour,
+      };
+
+      const r2 = await triggerReminder(payload);
+      console.log("H-1 Hour:", r2);
 
       await addReminderLogAdmin(clientUid, {
         bookingId,
@@ -128,20 +141,31 @@ export async function POST(req: NextRequest) {
         via: "telegram",
         scheduledAt: h1Hour,
         status: r2.success ? "scheduled" : "failed",
+        error: r2.success ? undefined : String(r2.error ?? ""),
       });
 
       results.push({ type: "h1_hour", ...r2 });
     } else {
-      console.log("H-1 Hour skipped — already passed:", h1Hour);
-      results.push({ type: "h1_hour", skipped: true });
+      console.log("H-1 Hour skipped — already passed");
+      results.push({ type: "h1_hour", skipped: true, reason: "time_passed" });
     }
 
-    return NextResponse.json({ success: true, results });
+    // ── Return success meski reminder gagal ──
+    // Booking tetap tersimpan, reminder adalah best-effort
+    const allFailed = results.every((r: any) => r.success === false);
+
+    return NextResponse.json({
+      success: true,
+      bookingSaved: true,
+      reminderStatus: allFailed ? "failed" : "triggered",
+      results,
+    });
   } catch (err: any) {
     console.error("Trigger reminder error:", err);
-    return NextResponse.json(
-      { error: err.message ?? "Internal error" },
-      { status: 500 },
-    );
+    return NextResponse.json({
+      success: true,
+      bookingSaved: true,
+      error: err.message,
+    });
   }
 }
