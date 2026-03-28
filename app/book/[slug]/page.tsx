@@ -9,6 +9,7 @@ import {
   addPublicBooking,
   type Service,
   type Booking,
+  triggerBookingReminder,
 } from "@/lib/firestore";
 
 const DEMO_SLUG = "demo-barber"; // ← slug demo tidak simpan ke DB
@@ -164,26 +165,53 @@ export default function BookingPage() {
     setSubmitting(true);
 
     try {
-      if (!isDemo && clientUid) {
-        const formatted = selectedDate!.toLocaleDateString("id-ID", {
-          day: "numeric",
-          month: "short",
-          year: "numeric",
-        });
-        await addPublicBooking(clientUid, {
-          customerName: form.name,
-          service: selectedServiceData?.name ?? "",
-          date: formatted,
-          time: selectedSlot!,
-          phone: form.phone,
-          email: form.email,
-          note: form.note,
-          status: "pending",
-          duration: selectedServiceData?.duration ?? "—",
-          price: selectedServiceData?.price ?? "—",
-        });
+      if (isDemo) {
+        // ── Demo: tidak simpan ke DB, langsung redirect ──
+        router.push(`/book/${slug}/success?ref=demo_${Date.now()}`);
+        return;
       }
-      router.push(`/book/${slug}/success`);
+
+      if (!clientUid) {
+        console.error("clientUid not found");
+        setSubmitting(false);
+        return;
+      }
+
+      const formatted = selectedDate!.toLocaleDateString("id-ID", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      });
+
+      // ── Simpan booking ke Firestore ──
+      const bookingId = await addPublicBooking(clientUid, {
+        customerName: form.name,
+        service: selectedServiceData?.name ?? "",
+        date: formatted,
+        time: selectedSlot!,
+        phone: form.phone,
+        email: form.email,
+        note: form.note,
+        status: "pending",
+        duration: selectedServiceData?.duration ?? "—",
+        price: selectedServiceData?.price ?? "—",
+      });
+
+      console.log("Booking created:", bookingId);
+
+      // ── Trigger n8n reminder (non-blocking) ──
+      triggerBookingReminder({
+        bookingId,
+        customerName: form.name,
+        service: selectedServiceData?.name ?? "",
+        date: formatted,
+        time: selectedSlot!,
+        phone: form.phone,
+        clientUid,
+      }).catch((err) => console.error("Reminder trigger failed:", err));
+
+      // ── Redirect ke success ──
+      router.push(`/book/${slug}/success?ref=${bookingId}`);
     } catch (err) {
       console.error("Error submitting booking:", err);
       setSubmitting(false);

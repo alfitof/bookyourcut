@@ -8,8 +8,9 @@ import { useAuth } from "@/context/AuthContext";
 import {
   getBookings,
   addBooking,
-  type Booking,
   getServices,
+  triggerBookingReminder,
+  type Booking,
   type Service,
 } from "@/lib/firestore";
 
@@ -158,6 +159,28 @@ export default function DashboardPage() {
         status: "confirmed",
         duration: info.duration,
         price: info.price,
+      });
+
+      const bookingId = await addBooking(user.uid, {
+        customerName: form.name,
+        service: form.service,
+        date: formatted,
+        time: form.time,
+        phone: form.phone,
+        status: "confirmed",
+        duration: info.duration,
+        price: info.price,
+      });
+
+      // ── Trigger n8n reminder ──
+      await triggerBookingReminder({
+        bookingId,
+        customerName: form.name,
+        service: form.service,
+        date: formatted,
+        time: form.time,
+        phone: form.phone,
+        clientUid: user.uid,
       });
 
       await fetchBookings();

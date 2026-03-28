@@ -1,12 +1,23 @@
 import Link from "next/link";
-import { CheckCircle } from "lucide-react";
+import { CheckCircle, XCircle } from "lucide-react";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 
 export default async function SuccessPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<{ ref?: string }>;
 }) {
   const { slug } = await params;
+  const { ref } = await searchParams;
+
+  // ── Validasi: harus ada ref (booking ID) ──
+  // Kalau tidak ada ref, redirect ke halaman booking
+  if (!ref) {
+    redirect(`/book/${slug}`);
+  }
 
   const businessName = (slug ?? "")
     .split("-")
@@ -28,7 +39,7 @@ export default async function SuccessPage({
         className="anim-scale-in"
         style={{ width: "100%", maxWidth: "460px", textAlign: "center" }}
       >
-        {/* ── Check icon ── */}
+        {/* Check icon */}
         <div
           style={{
             width: "88px",
@@ -66,18 +77,18 @@ export default async function SuccessPage({
         >
           Booking kamu di{" "}
           <strong style={{ color: "var(--text)" }}>{businessName}</strong> sudah
-          terkonfirmasi. Kami akan kirim reminder via WhatsApp sehari sebelum
-          jadwal. 🔔
+          diterima. Kami akan kirim reminder via Telegram/WhatsApp sehari
+          sebelum jadwal. 🔔
         </p>
 
-        {/* Booking summary */}
+        {/* Info */}
         <div
           style={{
             padding: "20px",
             borderRadius: "var(--r)",
             background: "var(--surface)",
             border: "1px solid var(--border)",
-            marginBottom: "24px",
+            marginBottom: "20px",
             textAlign: "left",
           }}
         >
@@ -92,19 +103,21 @@ export default async function SuccessPage({
               marginBottom: "14px",
             }}
           >
-            Detail Booking
+            Info Booking
           </p>
           {[
-            { label: "Status", value: "✅ Menunggu Konfirmasi" },
-            { label: "Reminder", value: "📱 Via WhatsApp" },
-          ].map((row) => (
+            { label: "Ref ID", value: `#${ref.slice(-8).toUpperCase()}` },
+            { label: "Status", value: "⏳ Menunggu Konfirmasi" },
+            { label: "Reminder", value: "📱 Via Telegram / WhatsApp" },
+          ].map((row, i, arr) => (
             <div
               key={row.label}
               style={{
                 display: "flex",
                 justifyContent: "space-between",
                 padding: "9px 0",
-                borderBottom: "1px solid var(--border)",
+                borderBottom:
+                  i < arr.length - 1 ? "1px solid var(--border)" : "none",
                 fontSize: "14px",
               }}
             >
@@ -132,11 +145,11 @@ export default async function SuccessPage({
               lineHeight: 1.5,
             }}
           >
-            📱{" "}
+            🔔{" "}
             <strong style={{ color: "var(--accent)" }}>
               Reminder otomatis
             </strong>{" "}
-            akan dikirim H-1 hari dan H-1 jam sebelum jadwal via WhatsApp.
+            akan dikirim H-1 hari dan H-1 jam sebelum jadwal.
           </p>
         </div>
 

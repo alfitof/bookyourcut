@@ -223,3 +223,56 @@ export async function addPublicBooking(uid: string, data: Omit<Booking, "id">) {
   });
   return ref.id;
 }
+
+export async function triggerBookingReminder(params: {
+  bookingId: string;
+  customerName: string;
+  service: string;
+  date: string;
+  time: string;
+  phone: string;
+  clientUid: string;
+}) {
+  try {
+    const res = await fetch("/api/trigger-reminder", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(params),
+    });
+    const data = await res.json();
+    console.log("Reminder trigger response:", data);
+    return data;
+  } catch (err) {
+    console.error("Failed to trigger reminder:", err);
+  }
+}
+
+export type ReminderLog = {
+  id: string;
+  bookingId: string;
+  customerName: string;
+  type: "h1_day" | "h1_hour";
+  via: string;
+  scheduledAt: string;
+  status: "scheduled" | "sent" | "failed";
+  createdAt?: any;
+};
+
+export async function getReminderLogs(uid: string): Promise<ReminderLog[]> {
+  const q = query(
+    collection(db, "clients", uid, "reminderLogs"),
+    orderBy("createdAt", "desc"),
+  );
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as ReminderLog);
+}
+
+export async function addReminderLog(
+  uid: string,
+  data: Omit<ReminderLog, "id">,
+) {
+  await addDoc(collection(db, "clients", uid, "reminderLogs"), {
+    ...data,
+    createdAt: serverTimestamp(),
+  });
+}
