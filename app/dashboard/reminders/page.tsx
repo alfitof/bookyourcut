@@ -1,7 +1,12 @@
 "use client";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { getReminderLogs, type ReminderLog } from "@/lib/firestore";
+import {
+  getReminderLogs,
+  deleteReminderLog,
+  deleteAllReminderLogs,
+  type ReminderLog,
+} from "@/lib/firestore";
 import Badge from "@/components/Badge";
 import Toggle from "@/components/Toggle";
 
@@ -15,6 +20,61 @@ export default function RemindersPage() {
   const [h1Hour, setH1Hour] = useState(true);
   const [sendTime, setSendTime] = useState("08:00");
   const [templateSaved, setTemplateSaved] = useState(false);
+  const [showAllLogs, setShowAllLogs] = useState(false);
+  const [deletingLog, setDeletingLog] = useState<string | null>(null);
+  const [deletingAll, setDeletingAll] = useState(false);
+  const [confirmClearAll, setConfirmClearAll] = useState(false);
+
+  const LOG_PREVIEW_COUNT = 5;
+  const displayedLogs = showAllLogs ? logs : logs.slice(0, LOG_PREVIEW_COUNT);
+
+  async function handleDeleteLog(logId: string) {
+    if (!user) return;
+    setDeletingLog(logId);
+    try {
+      // Cek apakah log punya executionId dan masih scheduled
+      const logToDelete = logs.find((l) => l.id === logId);
+
+      // Stop execution jika ada
+      if (logToDelete?.executionId && logToDelete.status === "scheduled") {
+        await fetch("/api/delete-reminder-logs", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            clientUid: user.uid,
+            singleLogId: logId,
+          }),
+        }).catch(console.error);
+      }
+
+      // Hapus dari Firestore via client SDK (sudah ada di rules)
+      await deleteReminderLog(user.uid, logId);
+      setLogs((prev) => prev.filter((l) => l.id !== logId));
+    } finally {
+      setDeletingLog(null);
+    }
+  }
+
+  async function handleDeleteAllLogs() {
+    if (!user) return;
+    setDeletingAll(true);
+    try {
+      const res = await fetch("/api/delete-reminder-logs", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clientUid: user.uid }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setLogs([]);
+      setConfirmClearAll(false);
+      setShowAllLogs(false);
+    } catch (err) {
+      console.error("Delete all logs error:", err);
+    } finally {
+      setDeletingAll(false);
+    }
+  }
 
   useEffect(() => {
     if (!user) return;
@@ -445,7 +505,35 @@ export default function RemindersPage() {
 
           {/* Log */}
           <div style={cardStyle}>
-            <h3 style={cardTitleStyle}>Log Reminder</h3>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: "18px",
+              }}
+            >
+              <h3 style={cardTitleStyle}>Log Reminder</h3>
+              {logs.length > 0 && (
+                <button
+                  onClick={() => setConfirmClearAll(true)}
+                  style={{
+                    padding: "5px 12px",
+                    borderRadius: "var(--r-sm)",
+                    background: "rgba(244,63,94,0.08)",
+                    border: "1px solid rgba(244,63,94,0.2)",
+                    color: "var(--red)",
+                    fontSize: "12px",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    fontFamily: "inherit",
+                  }}
+                >
+                  🗑 Hapus Semua
+                </button>
+              )}
+            </div>
+
             {loadingLogs ? (
               <div style={{ padding: "30px", textAlign: "center" }}>
                 <div
@@ -470,83 +558,267 @@ export default function RemindersPage() {
                 }}
               >
                 <p style={{ fontSize: "24px", marginBottom: "8px" }}>📭</p>
-                <p>Belum ada reminder yang dikirim.</p>
-                <p style={{ fontSize: "12px", marginTop: "4px" }}>
-                  Reminder akan muncul setelah ada booking.
-                </p>
+                <p>Belum ada reminder.</p>
               </div>
             ) : (
-              <div
-                style={{ display: "flex", flexDirection: "column", gap: "8px" }}
-              >
-                {logs.map((r) => (
-                  <div
-                    key={r.id}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      padding: "12px 14px",
-                      borderRadius: "var(--r-sm)",
-                      background: "var(--surface-2)",
-                      border: "1px solid var(--border)",
-                    }}
-                  >
+              <>
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "8px",
+                  }}
+                >
+                  {displayedLogs.map((r) => (
                     <div
+                      key={r.id}
                       style={{
                         display: "flex",
                         alignItems: "center",
-                        gap: "10px",
+                        justifyContent: "space-between",
+                        padding: "12px 14px",
+                        borderRadius: "var(--r-sm)",
+                        background: "var(--surface-2)",
+                        border: "1px solid var(--border)",
+                        opacity: deletingLog === r.id ? 0.5 : 1,
+                        transition: "opacity 0.15s",
                       }}
                     >
-                      <span style={{ fontSize: "16px" }}>
-                        {r.via === "telegram"
-                          ? "✈️"
-                          : r.via === "whatsapp"
-                            ? "📱"
-                            : "📧"}
-                      </span>
-                      <div>
-                        <p style={{ fontSize: "13px", fontWeight: 500 }}>
-                          {r.customerName}
-                        </p>
-                        <p
-                          style={{
-                            color: "var(--text-muted)",
-                            fontSize: "11px",
-                          }}
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "10px",
+                          flex: 1,
+                          minWidth: 0,
+                        }}
+                      >
+                        <span style={{ fontSize: "16px", flexShrink: 0 }}>
+                          {r.via === "telegram"
+                            ? "✈️"
+                            : r.via === "whatsapp"
+                              ? "📱"
+                              : "📧"}
+                        </span>
+                        <div style={{ minWidth: 0 }}>
+                          <p
+                            style={{
+                              fontSize: "13px",
+                              fontWeight: 500,
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {r.customerName}
+                          </p>
+                          <p
+                            style={{
+                              color: "var(--text-muted)",
+                              fontSize: "11px",
+                            }}
+                          >
+                            {r.type === "h1_day" ? "H-1 Hari" : "H-1 Jam"} ·{" "}
+                            {r.via} ·{" "}
+                            {new Date(r.scheduledAt).toLocaleDateString(
+                              "id-ID",
+                              {
+                                day: "numeric",
+                                month: "short",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              },
+                            )}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "8px",
+                          flexShrink: 0,
+                        }}
+                      >
+                        <Badge
+                          variant={
+                            r.status === "sent"
+                              ? "success"
+                              : r.status === "scheduled"
+                                ? "info"
+                                : r.status === "cancelled"
+                                  ? "default"
+                                  : "danger"
+                          }
                         >
-                          {r.type === "h1_day" ? "H-1 Hari" : "H-1 Jam"} ·{" "}
-                          {r.via} ·{" "}
-                          {new Date(r.scheduledAt).toLocaleDateString("id-ID", {
-                            day: "numeric",
-                            month: "short",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </p>
+                          {r.status === "sent"
+                            ? "Terkirim"
+                            : r.status === "scheduled"
+                              ? "Terjadwal"
+                              : r.status === "cancelled"
+                                ? "Dibatalkan"
+                                : "Gagal"}
+                        </Badge>
+
+                        <button
+                          onClick={() => handleDeleteLog(r.id)}
+                          disabled={deletingLog === r.id}
+                          style={{
+                            background: "none",
+                            border: "none",
+                            color: "var(--text-muted)",
+                            cursor: "pointer",
+                            padding: "4px",
+                            display: "flex",
+                            alignItems: "center",
+                            fontSize: "14px",
+                            lineHeight: 1,
+                          }}
+                          title="Hapus log"
+                        >
+                          ✕
+                        </button>
                       </div>
                     </div>
-                    <Badge
-                      variant={
-                        r.status === "sent"
-                          ? "success"
-                          : r.status === "scheduled"
-                            ? "info"
-                            : "danger"
-                      }
-                    >
-                      {r.status === "sent"
-                        ? "Terkirim"
-                        : r.status === "scheduled"
-                          ? "Terjadwal"
-                          : "Gagal"}
-                    </Badge>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+
+                {/* Show more / less */}
+                {logs.length > LOG_PREVIEW_COUNT && (
+                  <button
+                    onClick={() => setShowAllLogs(!showAllLogs)}
+                    style={{
+                      width: "100%",
+                      marginTop: "10px",
+                      padding: "9px",
+                      borderRadius: "var(--r-sm)",
+                      background: "var(--surface-3)",
+                      border: "1px solid var(--border)",
+                      color: "var(--text-dim)",
+                      fontSize: "13px",
+                      fontWeight: 500,
+                      cursor: "pointer",
+                      fontFamily: "inherit",
+                      transition: "all 0.15s",
+                    }}
+                  >
+                    {showAllLogs
+                      ? `▲ Tampilkan lebih sedikit`
+                      : `▼ Tampilkan ${logs.length - LOG_PREVIEW_COUNT} log lainnya`}
+                  </button>
+                )}
+              </>
             )}
           </div>
+          {confirmClearAll && (
+            <div
+              style={{
+                position: "fixed",
+                inset: 0,
+                background: "rgba(0,0,0,0.7)",
+                zIndex: 200,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: "20px",
+              }}
+              onClick={(e) => {
+                if (e.target === e.currentTarget && !deletingAll)
+                  setConfirmClearAll(false);
+              }}
+            >
+              <div
+                className="anim-scale-in"
+                style={{
+                  width: "100%",
+                  maxWidth: "380px",
+                  background: "var(--surface)",
+                  border: "1px solid rgba(244,63,94,0.2)",
+                  borderRadius: "var(--r-lg)",
+                  padding: "28px",
+                }}
+              >
+                {deletingAll ? (
+                  <div style={{ textAlign: "center", padding: "20px 0" }}>
+                    <div
+                      style={{
+                        width: "32px",
+                        height: "32px",
+                        borderRadius: "50%",
+                        border: "3px solid var(--border)",
+                        borderTop: "3px solid var(--red)",
+                        margin: "0 auto 12px",
+                        animation: "spin 0.8s linear infinite",
+                      }}
+                    />
+                    <p style={{ color: "var(--text-muted)", fontSize: "14px" }}>
+                      Menghapus...
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <h2
+                      style={{
+                        fontFamily: "Cabinet Grotesk, sans-serif",
+                        fontWeight: 900,
+                        fontSize: "20px",
+                        marginBottom: "10px",
+                      }}
+                    >
+                      Hapus Semua Log?
+                    </h2>
+                    <p
+                      style={{
+                        color: "var(--text-dim)",
+                        fontSize: "14px",
+                        lineHeight: 1.6,
+                        marginBottom: "24px",
+                      }}
+                    >
+                      {logs.length} log reminder akan dihapus permanen.
+                    </p>
+                    <div style={{ display: "flex", gap: "10px" }}>
+                      <button
+                        onClick={() => setConfirmClearAll(false)}
+                        style={{
+                          flex: 1,
+                          padding: "11px",
+                          borderRadius: "var(--r-sm)",
+                          background: "var(--surface-3)",
+                          border: "1px solid var(--border)",
+                          color: "var(--text-dim)",
+                          fontSize: "14px",
+                          fontWeight: 500,
+                          cursor: "pointer",
+                          fontFamily: "inherit",
+                        }}
+                      >
+                        Batal
+                      </button>
+                      <button
+                        onClick={handleDeleteAllLogs}
+                        style={{
+                          flex: 1,
+                          padding: "11px",
+                          borderRadius: "var(--r-sm)",
+                          background: "var(--red)",
+                          border: "none",
+                          color: "#fff",
+                          fontSize: "14px",
+                          fontWeight: 700,
+                          cursor: "pointer",
+                          fontFamily: "inherit",
+                        }}
+                      >
+                        Hapus Semua
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

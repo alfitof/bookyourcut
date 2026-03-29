@@ -86,6 +86,14 @@ export async function deleteService(uid: string, serviceId: string) {
 
 // ── BOOKINGS ───────────────────────────────────────
 
+export async function getBooking(
+  uid: string,
+  bookingId: string,
+): Promise<Booking | null> {
+  const snap = await getDoc(doc(db, "clients", uid, "bookings", bookingId));
+  if (!snap.exists()) return null;
+  return { id: snap.id, ...snap.data() } as Booking;
+}
 export async function getBookings(uid: string): Promise<Booking[]> {
   const q = query(
     collection(db, "clients", uid, "bookings"),
@@ -95,7 +103,10 @@ export async function getBookings(uid: string): Promise<Booking[]> {
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Booking);
 }
 
-export async function addBooking(uid: string, data: Omit<Booking, "id">) {
+export async function addBooking(
+  uid: string,
+  data: Omit<Booking, "id">,
+): Promise<string> {
   const ref = await addDoc(collection(db, "clients", uid, "bookings"), {
     ...data,
     createdAt: serverTimestamp(),
@@ -107,8 +118,11 @@ export async function updateBookingStatus(
   uid: string,
   bookingId: string,
   status: Booking["status"],
-) {
-  await updateDoc(doc(db, "clients", uid, "bookings", bookingId), { status });
+): Promise<void> {
+  await updateDoc(doc(db, "clients", uid, "bookings", bookingId), {
+    status,
+    updatedAt: serverTimestamp(),
+  });
 }
 
 export async function deleteBooking(uid: string, bookingId: string) {
@@ -215,7 +229,10 @@ export async function getClientBySlug(slug: string) {
   return { uid: doc.id, ...doc.data() } as ClientData & { uid: string };
 }
 
-export async function addPublicBooking(uid: string, data: Omit<Booking, "id">) {
+export async function addPublicBooking(
+  uid: string,
+  data: Omit<Booking, "id">,
+): Promise<string> {
   const ref = await addDoc(collection(db, "clients", uid, "bookings"), {
     ...data,
     status: "pending",
@@ -234,16 +251,24 @@ export async function triggerBookingReminder(params: {
   clientUid: string;
 }) {
   try {
-    const res = await fetch("/api/trigger-reminder", {
+    const baseUrl =
+      typeof window !== "undefined"
+        ? window.location.origin
+        : (process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000");
+
+    const res = await fetch(`${baseUrl}/api/trigger-reminder`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(params),
     });
+
     const data = await res.json();
     console.log("Reminder trigger response:", data);
     return data;
   } catch (err) {
-    console.error("Failed to trigger reminder:", err);
+    // Jangan throw — booking sudah tersimpan, reminder adalah bonus
+    console.error("Failed to trigger reminder (non-critical):", err);
+    return { success: false, error: String(err) };
   }
 }
 
@@ -254,17 +279,25 @@ export type ReminderLog = {
   type: "h1_day" | "h1_hour";
   via: string;
   scheduledAt: string;
-  status: "scheduled" | "sent" | "failed";
+  status: "scheduled" | "sent" | "failed" | "cancelled";
+  executionId?: string;
+  error?: string;
   createdAt?: any;
+  cancelledAt?: any;
 };
 
 export async function getReminderLogs(uid: string): Promise<ReminderLog[]> {
-  const q = query(
-    collection(db, "clients", uid, "reminderLogs"),
-    orderBy("createdAt", "desc"),
-  );
-  const snap = await getDocs(q);
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as ReminderLog);
+  try {
+    const q = query(
+      collection(db, "clients", uid, "reminderLogs"),
+      orderBy("createdAt", "desc"),
+    );
+    const snap = await getDocs(q);
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as ReminderLog);
+  } catch (err) {
+    console.error("getReminderLogs error:", err);
+    return [];
+  }
 }
 
 export async function addReminderLog(
@@ -275,4 +308,13 @@ export async function addReminderLog(
     ...data,
     createdAt: serverTimestamp(),
   });
+}
+
+export async function deleteReminderLog(uid: string, logId: string) {
+  await deleteDoc(doc(db, "clients", uid, "reminderLogs", logId));
+}
+
+export async function deleteAllReminderLogs(uid: string) {
+  const snap = await getDocs(collection(db, "clients", uid, "reminderLogs"));
+  await Promise.all(snap.docs.map((d) => deleteDoc(d.ref)));
 }

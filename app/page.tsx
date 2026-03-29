@@ -20,7 +20,7 @@ export default function LandingPage() {
     {
       icon: "🔗",
       title: "Link Personal",
-      desc: "bookyourcut.app/book/nama-barber — bagikan ke IG, WA, atau linktree kamu.",
+      desc: "bookyourcut.alfitofebriansyah.blog/nama-barber — bagikan ke IG, WA, atau linktree kamu.",
     },
     {
       icon: "📊",
@@ -207,7 +207,7 @@ export default function LandingPage() {
         <div className="anim-fade-up delay-3" style={{ marginTop: "48px" }}>
           <div className="url-preview">
             <span style={{ color: "var(--text-muted)" }}>
-              bookyourcut.app/book/
+              bookyourcut.alfitofebriansyah.blog/
             </span>
             <span style={{ color: "var(--accent)", fontWeight: 700 }}>
               nama-barber-kamu

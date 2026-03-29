@@ -1,6 +1,9 @@
+"use client";
+import { useState } from "react";
 import Badge from "./Badge";
 
 interface BookingCardProps {
+  id: string;
   customerName: string;
   service: string;
   date: string;
@@ -9,6 +12,7 @@ interface BookingCardProps {
   status: "confirmed" | "pending" | "completed" | "cancelled";
   duration?: string;
   price?: string;
+  clientUid?: string;
   onStatusChange?: (
     status: "confirmed" | "pending" | "completed" | "cancelled",
   ) => void;
@@ -21,7 +25,15 @@ const statusMap = {
   completed: { label: "Selesai", variant: "default" as const },
 };
 
+const nextStatuses: Record<string, string[]> = {
+  pending: ["confirmed", "cancelled"],
+  confirmed: ["completed", "cancelled"],
+  completed: [],
+  cancelled: [],
+};
+
 export default function BookingCard({
+  id,
   customerName,
   service,
   date,
@@ -30,8 +42,12 @@ export default function BookingCard({
   status,
   duration,
   price,
+  clientUid,
   onStatusChange,
 }: BookingCardProps) {
+  const [open, setOpen] = useState(false);
+  const [processing, setProcessing] = useState(false);
+
   const s = statusMap[status];
   const initials = customerName
     .split(" ")
@@ -39,16 +55,41 @@ export default function BookingCard({
     .join("")
     .slice(0, 2)
     .toUpperCase();
-  const [open, setOpen] = require("react").useState(false);
+  const available = nextStatuses[status] ?? [];
 
-  const nextStatuses = {
-    pending: ["confirmed", "cancelled"],
-    confirmed: ["completed", "cancelled"],
-    completed: [],
-    cancelled: [],
-  } as Record<string, string[]>;
+  async function handleStatusChange(newStatus: string) {
+    setOpen(false);
+    setProcessing(true);
 
-  const available = nextStatuses[status];
+    try {
+      // ── Panggil API update-booking-status ──
+      // API ini yang handle trigger/cancel n8n
+      const res = await fetch("/api/update-booking-status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          bookingId: id,
+          clientUid,
+          newStatus,
+        }),
+      });
+
+      const data = await res.json();
+      console.log("Status update response:", data);
+
+      if (!res.ok) {
+        console.error("Status update failed:", data.error);
+        return;
+      }
+
+      // ── Update UI ──
+      onStatusChange?.(newStatus as any);
+    } catch (err) {
+      console.error("handleStatusChange error:", err);
+    } finally {
+      setProcessing(false);
+    }
+  }
 
   return (
     <div
@@ -56,12 +97,13 @@ export default function BookingCard({
         padding: "18px 20px",
         borderRadius: "var(--r)",
         background: "var(--surface)",
-        border: "1px solid var(--border)",
+        border: `1px solid ${status === "cancelled" ? "rgba(244,63,94,0.2)" : "var(--border)"}`,
         display: "flex",
         alignItems: "center",
         gap: "16px",
-        transition: "border-color 0.15s",
         position: "relative",
+        opacity: processing ? 0.6 : 1,
+        transition: "all 0.15s",
       }}
     >
       {/* Avatar */}
@@ -70,14 +112,15 @@ export default function BookingCard({
           width: "42px",
           height: "42px",
           borderRadius: "10px",
-          background: "var(--surface-3)",
+          background:
+            status === "cancelled" ? "var(--surface-3)" : "var(--surface-2)",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
           fontFamily: "Cabinet Grotesk, sans-serif",
           fontWeight: 800,
           fontSize: "15px",
-          color: "var(--accent)",
+          color: status === "cancelled" ? "var(--text-muted)" : "var(--accent)",
           flexShrink: 0,
         }}
       >
@@ -99,6 +142,9 @@ export default function BookingCard({
               fontFamily: "Cabinet Grotesk, sans-serif",
               fontWeight: 700,
               fontSize: "15px",
+              textDecoration: status === "cancelled" ? "line-through" : "none",
+              color:
+                status === "cancelled" ? "var(--text-muted)" : "var(--text)",
             }}
           >
             {customerName}
@@ -145,7 +191,12 @@ export default function BookingCard({
             fontFamily: "Cabinet Grotesk, sans-serif",
             fontWeight: 700,
             fontSize: "14px",
-            color: status === "completed" ? "#22c55e" : "var(--accent)",
+            color:
+              status === "completed"
+                ? "#22c55e"
+                : status === "cancelled"
+                  ? "var(--text-muted)"
+                  : "var(--accent)",
             flexShrink: 0,
           }}
         >
@@ -154,7 +205,7 @@ export default function BookingCard({
       )}
 
       {/* Status change button */}
-      {available.length > 0 && onStatusChange && (
+      {available.length > 0 && onStatusChange && !processing && (
         <div style={{ position: "relative", flexShrink: 0 }}>
           <button
             onClick={() => setOpen(!open)}
@@ -164,65 +215,87 @@ export default function BookingCard({
               background: "var(--surface-3)",
               border: "1px solid var(--border)",
               color: "var(--text-dim)",
-              fontSize: "12px",
+              fontSize: "14px",
               cursor: "pointer",
               fontFamily: "inherit",
+              lineHeight: 1,
             }}
           >
             ⋯
           </button>
           {open && (
-            <div
-              style={{
-                position: "absolute",
-                right: 0,
-                top: "calc(100% + 6px)",
-                background: "var(--surface)",
-                border: "1px solid var(--border)",
-                borderRadius: "var(--r-sm)",
-                boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
-                zIndex: 50,
-                minWidth: "160px",
-                overflow: "hidden",
-              }}
-            >
-              {available.map((ns) => (
-                <button
-                  key={ns}
-                  onClick={() => {
-                    onStatusChange(ns as any);
-                    setOpen(false);
-                  }}
-                  style={{
-                    display: "block",
-                    width: "100%",
-                    padding: "10px 14px",
-                    background: "none",
-                    border: "none",
-                    textAlign: "left",
-                    color:
-                      ns === "completed"
-                        ? "#22c55e"
-                        : ns === "cancelled"
-                          ? "var(--red)"
-                          : "var(--text)",
-                    fontSize: "13px",
-                    fontWeight: 500,
-                    cursor: "pointer",
-                    fontFamily: "inherit",
-                  }}
-                >
-                  {ns === "completed"
-                    ? "✓ Tandai Selesai"
-                    : ns === "confirmed"
-                      ? "✓ Konfirmasi"
-                      : "✕ Batalkan"}
-                </button>
-              ))}
-            </div>
+            <>
+              {/* Backdrop */}
+              <div
+                style={{ position: "fixed", inset: 0, zIndex: 49 }}
+                onClick={() => setOpen(false)}
+              />
+              <div
+                style={{
+                  position: "absolute",
+                  right: 0,
+                  top: "calc(100% + 6px)",
+                  background: "var(--surface)",
+                  border: "1px solid var(--border)",
+                  borderRadius: "var(--r-sm)",
+                  boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
+                  zIndex: 50,
+                  minWidth: "170px",
+                  overflow: "hidden",
+                }}
+              >
+                {available.map((ns) => (
+                  <button
+                    key={ns}
+                    onClick={() => handleStatusChange(ns)}
+                    style={{
+                      display: "block",
+                      width: "100%",
+                      padding: "10px 14px",
+                      background: "none",
+                      border: "none",
+                      borderBottom: "1px solid var(--border)",
+                      textAlign: "left",
+                      color:
+                        ns === "completed"
+                          ? "#22c55e"
+                          : ns === "cancelled"
+                            ? "var(--red)"
+                            : "var(--text)",
+                      fontSize: "13px",
+                      fontWeight: 500,
+                      cursor: "pointer",
+                      fontFamily: "inherit",
+                    }}
+                  >
+                    {ns === "completed"
+                      ? "✓ Tandai Selesai"
+                      : ns === "confirmed"
+                        ? "✓ Konfirmasi"
+                        : "✕ Batalkan"}
+                  </button>
+                ))}
+              </div>
+            </>
           )}
         </div>
       )}
+
+      {processing && (
+        <div
+          style={{
+            width: "20px",
+            height: "20px",
+            borderRadius: "50%",
+            border: "2px solid var(--border)",
+            borderTop: "2px solid var(--accent)",
+            animation: "spin 0.8s linear infinite",
+            flexShrink: 0,
+          }}
+        />
+      )}
+
+      <style>{`@keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }`}</style>
     </div>
   );
 }

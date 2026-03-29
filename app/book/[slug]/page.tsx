@@ -192,23 +192,12 @@ export default function BookingPage() {
         phone: form.phone,
         email: form.email,
         note: form.note,
-        status: "pending",
+        status: "pending", // ← tunggu admin confirm
         duration: selectedServiceData?.duration ?? "—",
         price: selectedServiceData?.price ?? "—",
       });
 
       console.log("Booking created:", bookingId);
-
-      // ── Trigger n8n reminder (non-blocking) ──
-      triggerBookingReminder({
-        bookingId,
-        customerName: form.name,
-        service: selectedServiceData?.name ?? "",
-        date: formatted,
-        time: selectedSlot!,
-        phone: form.phone,
-        clientUid,
-      }).catch((err) => console.error("Reminder trigger failed:", err));
 
       // ── Redirect ke success ──
       router.push(`/book/${slug}/success?ref=${bookingId}`);

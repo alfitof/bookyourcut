@@ -69,7 +69,7 @@ export default function NewClientPage() {
     const text =
       type === "password"
         ? createdData.password
-        : `Barber   : ${createdData.businessName}\nEmail    : ${createdData.email}\nPassword : ${createdData.password}\nBooking  : https://bookyourcut.app/book/${createdData.slug}\nLogin    : https://bookyourcut.app/login`;
+        : `Barber   : ${createdData.businessName}\nEmail    : ${createdData.email}\nPassword : ${createdData.password}\nBooking  : https://bookyourcut.alfitofebriansyah.blog/${createdData.slug}\nLogin    : https://bookyourcut.app/login`;
     navigator.clipboard.writeText(text);
     setCopied(type);
     setTimeout(() => setCopied(null), 2000);
@@ -170,7 +170,7 @@ export default function NewClientPage() {
               { label: "Nama Barber", value: createdData.businessName },
               {
                 label: "Link Booking",
-                value: `bookyourcut.app/book/${createdData.slug}`,
+                value: `bookyourcut.alfitofebriansyah.blog/${createdData.slug}`,
                 mono: true,
                 color: "var(--purple)",
               },
@@ -402,7 +402,9 @@ export default function NewClientPage() {
               <div className="ncp-field-full">
                 <label style={labelStyle}>Link Booking *</label>
                 <div className="ncp-slug-wrap">
-                  <span className="ncp-slug-prefix">bookyourcut.app/book/</span>
+                  <span className="ncp-slug-prefix">
+                    bookyourcut.alfitofebriansyah.blog/
+                  </span>
                   <input
                     type="text"
                     value={form.slug}
@@ -439,7 +441,7 @@ export default function NewClientPage() {
                   >
                     Preview:{" "}
                     <span style={{ color: "var(--purple)" }}>
-                      bookyourcut.app/book/{form.slug}
+                      bookyourcut.alfitofebriansyah.blog/{form.slug}
                     </span>
                   </p>
                 )}

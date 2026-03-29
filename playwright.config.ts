@@ -27,7 +27,7 @@ export default defineConfig({
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   use: {
     baseURL: isCI
-      ? "https://bookyourcut.alfitofebriansyah.blog"
+      ? "https://bookyourcut.alfitofebriansyah.blog/"
       : "http://localhost:3000",
   },
 

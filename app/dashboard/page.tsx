@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import StatCard from "@/components/StatCard";
 import BookingCard from "@/components/BookingCard";
@@ -44,11 +44,12 @@ const todayName = [
 
 export default function DashboardPage() {
   const { user } = useAuth();
-
+  const [loadingSlots, setLoadingSlots] = useState(false);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loadingData, setLoadingData] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [bookedSlots, setBookedSlots] = useState<string[]>([]);
   const [form, setForm] = useState({
     name: "",
     phone: "",
@@ -94,6 +95,26 @@ export default function DashboardPage() {
       : { duration: "—", price: "—" };
   }
 
+  async function fetchBookedSlots(dateStr: string) {
+    if (!user || !dateStr) return;
+    setLoadingSlots(true);
+    try {
+      const dateObj = new Date(dateStr);
+      const formatted = dateObj.toLocaleDateString("id-ID", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      });
+      const allBookings = await getBookings(user.uid);
+      const taken = allBookings
+        .filter((b) => b.date === formatted && b.status !== "cancelled")
+        .map((b) => b.time);
+      setBookedSlots(taken);
+    } finally {
+      setLoadingSlots(false);
+    }
+  }
+
   async function fetchBookings() {
     if (!user) return;
     setLoadingData(true);
@@ -132,12 +153,23 @@ export default function DashboardPage() {
         ? `Rp ${(revenue / 1000).toFixed(0)}rb`
         : `Rp ${revenue}`;
 
+  const isSubmittingRef = useRef(false);
+
   async function handleAddBooking() {
-    if (!user) return;
-    if (!form.name.trim() || !form.phone.trim() || !form.date) {
-      setFormError("Nama, nomor HP, dan tanggal wajib diisi.");
+    // ── Guard: prevent double call ──
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
+
+    if (!user) {
+      isSubmittingRef.current = false;
       return;
     }
+    if (!form.name.trim() || !form.phone.trim() || !form.date) {
+      setFormError("Nama, nomor HP, dan tanggal wajib diisi.");
+      isSubmittingRef.current = false;
+      return;
+    }
+
     setFormError("");
     setSubmitting(true);
 
@@ -150,17 +182,6 @@ export default function DashboardPage() {
       });
       const info = getServiceInfo(form.service);
 
-      await addBooking(user.uid, {
-        customerName: form.name,
-        service: form.service,
-        date: formatted,
-        time: form.time,
-        phone: form.phone,
-        status: "confirmed",
-        duration: info.duration,
-        price: info.price,
-      });
-
       const bookingId = await addBooking(user.uid, {
         customerName: form.name,
         service: form.service,
@@ -172,31 +193,37 @@ export default function DashboardPage() {
         price: info.price,
       });
 
-      // ── Trigger n8n reminder ──
-      await triggerBookingReminder({
-        bookingId,
-        customerName: form.name,
-        service: form.service,
-        date: formatted,
-        time: form.time,
-        phone: form.phone,
-        clientUid: user.uid,
+      console.log("Booking manual created:", bookingId);
+
+      // ── Trigger n8n via API route (confirmed langsung) ──
+      const triggerRes = await fetch("/api/update-booking-status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          bookingId,
+          clientUid: user.uid,
+          newStatus: "confirmed",
+        }),
       });
+      const triggerData = await triggerRes.json();
+      console.log("Trigger result:", triggerData);
 
       await fetchBookings();
       setForm({
         name: "",
         phone: "",
-        service: SERVICES[0],
+        service: services[0]?.name ?? "",
         date: "",
         time: SLOTS[0],
       });
+      setBookedSlots([]);
       setShowModal(false);
     } catch (err) {
       console.error("Error adding booking:", err);
       setFormError("Gagal menambahkan booking. Coba lagi.");
     } finally {
       setSubmitting(false);
+      isSubmittingRef.current = false;
     }
   }
 
@@ -759,22 +786,98 @@ export default function DashboardPage() {
                   <input
                     type="date"
                     value={form.date}
-                    onChange={(e) => setForm({ ...form, date: e.target.value })}
+                    onChange={(e) => {
+                      setForm({ ...form, date: e.target.value });
+                      fetchBookedSlots(e.target.value);
+                    }}
                     className="date-input-light"
                     style={modalInputStyle}
                   />
                 </div>
                 <div>
-                  <label style={modalLabelStyle}>Jam</label>
-                  <select
-                    value={form.time}
-                    onChange={(e) => setForm({ ...form, time: e.target.value })}
-                    style={modalInputStyle}
-                  >
-                    {SLOTS.map((s) => (
-                      <option key={s}>{s}</option>
-                    ))}
-                  </select>
+                  <label style={modalLabelStyle}>
+                    Jam{loadingSlots ? " (memuat...)" : ""}
+                  </label>
+                  {form.date ? (
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns:
+                          "repeat(auto-fill, minmax(72px, 1fr))",
+                        gap: "6px",
+                        marginTop: "4px",
+                      }}
+                    >
+                      {SLOTS.map((slot) => {
+                        const isBooked = bookedSlots.includes(slot);
+                        const isSelected = form.time === slot;
+                        return (
+                          <button
+                            key={slot}
+                            type="button"
+                            disabled={isBooked}
+                            onClick={() =>
+                              !isBooked && setForm({ ...form, time: slot })
+                            }
+                            style={{
+                              padding: "8px 4px",
+                              borderRadius: "var(--r-sm)",
+                              border: isSelected
+                                ? "2px solid var(--accent)"
+                                : "1px solid var(--border)",
+                              background: isSelected
+                                ? "var(--accent)"
+                                : isBooked
+                                  ? "var(--surface-3)"
+                                  : "var(--surface-2)",
+                              color: isSelected
+                                ? "#08090c"
+                                : isBooked
+                                  ? "var(--text-muted)"
+                                  : "var(--text)",
+                              fontSize: "12px",
+                              fontWeight: isSelected ? 700 : 500,
+                              cursor: isBooked ? "not-allowed" : "pointer",
+                              textDecoration: isBooked
+                                ? "line-through"
+                                : "none",
+                              opacity: isBooked ? 0.5 : 1,
+                              transition: "all 0.15s",
+                              fontFamily: "inherit",
+                            }}
+                          >
+                            {slot}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p
+                      style={{
+                        color: "var(--text-muted)",
+                        fontSize: "13px",
+                        marginTop: "8px",
+                        padding: "10px",
+                        background: "var(--surface-3)",
+                        borderRadius: "var(--r-sm)",
+                        textAlign: "center",
+                      }}
+                    >
+                      Pilih tanggal dulu untuk melihat slot tersedia
+                    </p>
+                  )}
+                  {form.date && bookedSlots.length > 0 && (
+                    <p
+                      style={{
+                        color: "var(--text-muted)",
+                        fontSize: "11px",
+                        marginTop: "6px",
+                      }}
+                    >
+                      <span style={{ color: "var(--red)" }}>■</span> = sudah
+                      dibooking
+                    </p>
+                  )}
                 </div>
               </div>
             </div>

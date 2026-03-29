@@ -219,7 +219,7 @@ export default function SettingsPage() {
                       alignItems: "center",
                     }}
                   >
-                    bookyourcut.app/book/
+                    bookyourcut.alfitofebriansyah.blog/
                   </span>
                   <input
                     type="text"

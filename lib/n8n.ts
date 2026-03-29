@@ -8,7 +8,7 @@ export type ReminderPayload = {
   clientName: string;
   chatId: string;
   reminderType: "h1_day" | "h1_hour";
-  waitUntil: string; // ISO string
+  waitUntil: string;
 };
 
 export async function triggerReminder(payload: ReminderPayload) {
@@ -16,33 +16,66 @@ export async function triggerReminder(payload: ReminderPayload) {
     process.env.N8N_WEBHOOK_URL ?? process.env.NEXT_PUBLIC_N8N_WEBHOOK_URL;
   const secret = process.env.N8N_WEBHOOK_SECRET ?? "";
 
-  console.log("Webhook URL:", webhookUrl);
-
-  if (!webhookUrl) {
-    console.warn("N8N_WEBHOOK_URL not set");
-    return { success: false, reason: "no_webhook_url" };
-  }
+  if (!webhookUrl) return { success: false, reason: "no_webhook_url" };
 
   try {
     const res = await fetch(webhookUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-api-key": secret, // ← ganti dari x-webhook-secret ke x-api-key
+        "x-api-key": secret,
       },
       body: JSON.stringify(payload),
     });
 
     const text = await res.text();
-    console.log("n8n status:", res.status, "| body:", text);
+    console.log("n8n response:", res.status, text);
 
-    if (!res.ok) {
-      throw new Error(`n8n error: ${res.status} - ${text}`);
+    if (!res.ok) throw new Error(`n8n error: ${res.status} - ${text}`);
+
+    // ── Parse executionId dari response n8n ──
+    let executionId: string | undefined;
+    try {
+      const json = JSON.parse(text);
+      executionId = json.executionId ?? json.id;
+    } catch {
+      // Response bukan JSON — tidak ada executionId
     }
 
+    return { success: true, executionId };
+  } catch (err) {
+    return { success: false, error: String(err) };
+  }
+}
+
+export async function cancelReminder(bookingId: string) {
+  const cancelUrl =
+    process.env.N8N_CANCEL_WEBHOOK_URL ??
+    process.env.NEXT_PUBLIC_N8N_CANCEL_WEBHOOK_URL;
+  const secret = process.env.N8N_WEBHOOK_SECRET ?? "";
+
+  if (!cancelUrl) {
+    console.warn(
+      "N8N_CANCEL_WEBHOOK_URL not set — reminder will not be cancelled",
+    );
+    return { success: false, reason: "no_cancel_url" };
+  }
+
+  try {
+    const res = await fetch(cancelUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": secret,
+      },
+      body: JSON.stringify({ bookingId, action: "cancel" }),
+    });
+
+    const text = await res.text();
+    if (!res.ok) throw new Error(`n8n cancel error: ${res.status} - ${text}`);
     return { success: true };
   } catch (err) {
-    console.error("triggerReminder error:", err);
+    console.error("cancelReminder error:", err);
     return { success: false, error: String(err) };
   }
 }
@@ -81,33 +114,18 @@ export function calculateWaitTimes(dateStr: string, timeStr: string) {
     return `${pad(y, 4)}-${pad(mo + 1)}-${pad(d)}T${pad(h)}:${pad(mi)}:${pad(s)}+07:00`;
   }
 
-  // Waktu booking dalam WIB
-  const bookingWIB = toWIBIso(year, month, day, hour, minute);
-  const h1DayWIB = toWIBIso(year, month, day - 1, 8, 0);
-  const bookingDate = new Date(bookingWIB);
-  const h1HourDate = new Date(bookingDate.getTime() - 60 * 60 * 1000);
-
   function dateToWIBIso(date: Date): string {
     const wibOffset = 7 * 60;
-    const utcMs = date.getTime();
-    const wibMs = utcMs + wibOffset * 60 * 1000;
+    const wibMs = date.getTime() + wibOffset * 60 * 1000;
     const wibDate = new Date(wibMs);
-
     const pad = (n: number, len = 2) => String(n).padStart(len, "0");
-    const y = wibDate.getUTCFullYear();
-    const mo = wibDate.getUTCMonth();
-    const d = wibDate.getUTCDate();
-    const h = wibDate.getUTCHours();
-    const mi = wibDate.getUTCMinutes();
-    const s = wibDate.getUTCSeconds();
-
-    return `${pad(y, 4)}-${pad(mo + 1)}-${pad(d)}T${pad(h)}:${pad(mi)}:${pad(s)}+07:00`;
+    return `${pad(wibDate.getUTCFullYear(), 4)}-${pad(wibDate.getUTCMonth() + 1)}-${pad(wibDate.getUTCDate())}T${pad(wibDate.getUTCHours())}:${pad(wibDate.getUTCMinutes())}:${pad(wibDate.getUTCSeconds())}+07:00`;
   }
 
+  const bookingWIB = toWIBIso(year, month, day, hour, minute);
+  const h1DayWIB = toWIBIso(year, month, day - 1, 8, 0);
+  const h1HourDate = new Date(new Date(bookingWIB).getTime() - 60 * 60 * 1000);
   const h1HourWIB = dateToWIBIso(h1HourDate);
-  return {
-    bookingTime: bookingWIB,
-    h1Day: h1DayWIB,
-    h1Hour: h1HourWIB,
-  };
+
+  return { bookingTime: bookingWIB, h1Day: h1DayWIB, h1Hour: h1HourWIB };
 }
