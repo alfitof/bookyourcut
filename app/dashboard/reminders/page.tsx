@@ -32,10 +32,8 @@ export default function RemindersPage() {
     if (!user) return;
     setDeletingLog(logId);
     try {
-      // Cek apakah log punya executionId dan masih scheduled
       const logToDelete = logs.find((l) => l.id === logId);
 
-      // Stop execution jika ada
       if (logToDelete?.executionId && logToDelete.status === "scheduled") {
         await fetch("/api/delete-reminder-logs", {
           method: "DELETE",
@@ -46,8 +44,6 @@ export default function RemindersPage() {
           }),
         }).catch(console.error);
       }
-
-      // Hapus dari Firestore via client SDK (sudah ada di rules)
       await deleteReminderLog(user.uid, logId);
       setLogs((prev) => prev.filter((l) => l.id !== logId));
     } finally {

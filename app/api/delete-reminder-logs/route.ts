@@ -1,28 +1,33 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin-server";
-import { FieldValue } from "firebase-admin/firestore";
 
 export async function DELETE(req: NextRequest) {
   try {
-    const { clientUid, singleLogId } = await req.json();
+    const body = await req.json();
+    const { clientUid, singleLogId } = body;
 
     if (!clientUid) {
       return NextResponse.json({ error: "Missing clientUid" }, { status: 400 });
     }
 
-    // ── Ambil semua logs ──
-    const logsSnap = await adminDb
-      .collection("clients")
-      .doc(clientUid)
-      .collection("reminderLogs")
-      .get();
-
     const n8nApiUrl = process.env.N8N_API_URL;
     const n8nApiKey = process.env.N8N_API_KEY;
-    const stopResults = [];
 
+    async function stopExecution(executionId: string) {
+      if (!n8nApiUrl || !n8nApiKey || !executionId) return;
+      try {
+        const res = await fetch(`${n8nApiUrl}/executions/${executionId}/stop`, {
+          method: "POST",
+          headers: { "X-N8N-API-KEY": n8nApiKey },
+        });
+        console.log(`Stop execution ${executionId}: ${res.status}`);
+      } catch (err) {
+        console.error("Stop execution error:", err);
+      }
+    }
+
+    // ── SINGLE: stop 1 execution + client SDK yang hapus ──
     if (singleLogId) {
-      // Hapus satu log + stop execution-nya
       const logDoc = await adminDb
         .collection("clients")
         .doc(clientUid)
@@ -32,51 +37,34 @@ export async function DELETE(req: NextRequest) {
 
       if (logDoc.exists) {
         const data = logDoc.data()!;
-        if (
-          data.status === "scheduled" &&
-          data.executionId &&
-          n8nApiUrl &&
-          n8nApiKey
-        ) {
-          await fetch(`${n8nApiUrl}/executions/${data.executionId}/stop`, {
-            method: "POST",
-            headers: { "X-N8N-API-KEY": n8nApiKey },
-          }).catch(console.error);
+        if (data.executionId && data.status === "scheduled") {
+          await stopExecution(data.executionId);
         }
-        // Tidak perlu delete di sini, client SDK yang handle
       }
-
-      return NextResponse.json({ success: true });
+      // Client SDK yang hapus document-nya (sudah di-handle di frontend)
+      return NextResponse.json({ success: true, action: "single_stopped" });
     }
 
-    // ── Stop semua yang masih scheduled ──
+    // ── ALL: stop semua + hapus semua via batch ──
+    const logsSnap = await adminDb
+      .collection("clients")
+      .doc(clientUid)
+      .collection("reminderLogs")
+      .get();
+
+    const stopResults = [];
+
     for (const logDoc of logsSnap.docs) {
       const data = logDoc.data();
-      if (
-        data.status === "scheduled" &&
-        data.executionId &&
-        n8nApiUrl &&
-        n8nApiKey
-      ) {
-        try {
-          const res = await fetch(
-            `${n8nApiUrl}/executions/${data.executionId}/stop`,
-            {
-              method: "POST",
-              headers: { "X-N8N-API-KEY": n8nApiKey },
-            },
-          );
-          console.log(`Stop execution ${data.executionId}: ${res.status}`);
-          stopResults.push({ executionId: data.executionId, stopped: res.ok });
-        } catch (err) {
-          console.error("Stop execution error:", err);
-        }
+      if (data.executionId && data.status === "scheduled") {
+        await stopExecution(data.executionId);
+        stopResults.push(data.executionId);
       }
     }
 
-    // ── Hapus semua logs dalam batch ──
-    const batchSize = 500; // Firestore batch limit
+    // Hapus semua dalam batch
     const docs = logsSnap.docs;
+    const batchSize = 500;
 
     for (let i = 0; i < docs.length; i += batchSize) {
       const batch = adminDb.batch();
@@ -86,7 +74,9 @@ export async function DELETE(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
+      action: "all_deleted",
       deleted: docs.length,
+      stopped: stopResults.length,
       stopResults,
     });
   } catch (err: any) {

@@ -156,7 +156,6 @@ export default function DashboardPage() {
   const isSubmittingRef = useRef(false);
 
   async function handleAddBooking() {
-    // ── Guard: prevent double call ──
     if (isSubmittingRef.current) return;
     isSubmittingRef.current = true;
 
@@ -182,6 +181,7 @@ export default function DashboardPage() {
       });
       const info = getServiceInfo(form.service);
 
+      // ── Step 1: Simpan booking dulu ──
       const bookingId = await addBooking(user.uid, {
         customerName: form.name,
         service: form.service,
@@ -195,7 +195,10 @@ export default function DashboardPage() {
 
       console.log("Booking manual created:", bookingId);
 
-      // ── Trigger n8n via API route (confirmed langsung) ──
+      // ── Step 2: Tunggu sebentar agar Firestore konsisten ──
+      await new Promise((r) => setTimeout(r, 500));
+
+      // ── Step 3: Trigger n8n via API (booking sudah ada di Firestore) ──
       const triggerRes = await fetch("/api/update-booking-status", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -203,8 +206,10 @@ export default function DashboardPage() {
           bookingId,
           clientUid: user.uid,
           newStatus: "confirmed",
+          forceRetrigger: true,
         }),
       });
+
       const triggerData = await triggerRes.json();
       console.log("Trigger result:", triggerData);
 
@@ -218,9 +223,9 @@ export default function DashboardPage() {
       });
       setBookedSlots([]);
       setShowModal(false);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error adding booking:", err);
-      setFormError("Gagal menambahkan booking. Coba lagi.");
+      setFormError("Gagal menambahkan booking: " + err.message);
     } finally {
       setSubmitting(false);
       isSubmittingRef.current = false;

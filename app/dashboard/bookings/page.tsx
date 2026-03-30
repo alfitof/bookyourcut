@@ -151,7 +151,6 @@ function BookingsContent() {
   const isSubmittingRef = useRef(false);
 
   async function handleAddBooking() {
-    // ── Guard: prevent double call ──
     if (isSubmittingRef.current) return;
     isSubmittingRef.current = true;
 
@@ -190,7 +189,8 @@ function BookingsContent() {
 
       console.log("Booking manual created:", bookingId);
 
-      // ── Trigger n8n via API route (confirmed langsung) ──
+      await new Promise((r) => setTimeout(r, 500));
+
       const triggerRes = await fetch("/api/update-booking-status", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -198,8 +198,10 @@ function BookingsContent() {
           bookingId,
           clientUid: user.uid,
           newStatus: "confirmed",
+          forceRetrigger: true,
         }),
       });
+
       const triggerData = await triggerRes.json();
       console.log("Trigger result:", triggerData);
 
@@ -213,9 +215,9 @@ function BookingsContent() {
       });
       setBookedSlots([]);
       setShowModal(false);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error adding booking:", err);
-      setFormError("Gagal menambahkan booking. Coba lagi.");
+      setFormError("Gagal menambahkan booking: " + err.message);
     } finally {
       setSubmitting(false);
       isSubmittingRef.current = false;

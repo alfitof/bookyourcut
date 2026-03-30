@@ -15,8 +15,13 @@ export async function triggerReminder(payload: ReminderPayload) {
   const webhookUrl =
     process.env.N8N_WEBHOOK_URL ?? process.env.NEXT_PUBLIC_N8N_WEBHOOK_URL;
   const secret = process.env.N8N_WEBHOOK_SECRET ?? "";
+  const n8nApi = process.env.N8N_API_URL;
+  const n8nKey = process.env.N8N_API_KEY;
 
-  if (!webhookUrl) return { success: false, reason: "no_webhook_url" };
+  if (!webhookUrl) {
+    console.warn("N8N_WEBHOOK_URL not set");
+    return { success: false, reason: "no_webhook_url" };
+  }
 
   try {
     const res = await fetch(webhookUrl, {
@@ -33,17 +38,41 @@ export async function triggerReminder(payload: ReminderPayload) {
 
     if (!res.ok) throw new Error(`n8n error: ${res.status} - ${text}`);
 
-    // ── Parse executionId dari response n8n ──
     let executionId: string | undefined;
-    try {
-      const json = JSON.parse(text);
-      executionId = json.executionId ?? json.id;
-    } catch {
-      // Response bukan JSON — tidak ada executionId
+
+    if (n8nApi && n8nKey) {
+      try {
+        await new Promise((r) => setTimeout(r, 500));
+
+        const execRes = await fetch(
+          `${n8nApi}/executions?limit=1&status=waiting`,
+          {
+            headers: { "X-N8N-API-KEY": n8nKey },
+          },
+        );
+
+        if (execRes.ok) {
+          const execData = await execRes.json();
+          const executions = execData.data ?? execData;
+          if (Array.isArray(executions) && executions.length > 0) {
+            const latest = executions[0];
+            executionId = String(latest.id);
+            console.log(
+              "Got executionId:",
+              executionId,
+              "for",
+              payload.reminderType,
+            );
+          }
+        }
+      } catch (err) {
+        console.warn("Could not fetch executionId:", err);
+      }
     }
 
     return { success: true, executionId };
   } catch (err) {
+    console.error("triggerReminder error:", err);
     return { success: false, error: String(err) };
   }
 }
